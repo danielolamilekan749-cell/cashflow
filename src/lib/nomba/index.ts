@@ -1,11 +1,19 @@
-export { connectToNomba, issueAccessToken, issueDemoAccessToken } from './auth'
+export { issueAccessToken, issueDemoAccessToken, refreshAccessToken, revokeAccessToken } from './auth'
+export { getNombaApiBase, NOMBA_API_PROXY, NOMBA_PRODUCTION_URL, NOMBA_SANDBOX_URL } from './config'
 export {
-  getNombaApiBase,
-  getNombaBaseUrl,
-  getNombaCredentials,
-  getNombaEnvironment,
-  hasNombaCredentials,
-  NOMBA_API_PROXY,
-} from './config'
-export { clearSession, getAccessToken, getStoredSession, isSessionConnected, saveSession } from './tokenStore'
-export type { NombaApiResponse, NombaAuthResult, NombaEnvironment, NombaTokenResponse, StoredNombaSession } from './types'
+  clearSession,
+  getAccessToken,
+  getRefreshToken,
+  getStoredSession,
+  isSessionConnected,
+  isTokenExpired,
+  saveSession,
+} from './tokenStore'
+export type {
+  NombaApiResponse,
+  NombaAuthResult,
+  NombaCredentials,
+  NombaEnvironment,
+  NombaTokenResponse,
+  StoredNombaSession,
+} from './types'

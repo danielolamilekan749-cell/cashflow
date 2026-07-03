@@ -5,8 +5,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
+      // Proxies /api/nomba/* → https://api.nomba.com/* to avoid CORS in dev
       '/api/nomba': {
-        target: 'https://sandbox.nomba.com',
+        target: 'https://api.nomba.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/nomba/, ''),
       },

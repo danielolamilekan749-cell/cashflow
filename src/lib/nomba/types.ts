@@ -3,6 +3,8 @@ export type NombaEnvironment = 'sandbox' | 'production'
 export type NombaTokenResponse = {
   access_token: string
   refresh_token?: string
+  token_type?: string
+  expires_in?: number
   expiresAt?: string
 }
 
@@ -21,4 +23,13 @@ export type StoredNombaSession = {
   environment: NombaEnvironment
   expiresAt?: string
   demoMode?: boolean
+  // merchant credentials (stored so we can refresh)
+  clientId?: string
+  accountId?: string
+}
+
+export type NombaCredentials = {
+  clientId: string
+  clientSecret: string
+  accountId: string
 }

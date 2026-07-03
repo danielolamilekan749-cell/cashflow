@@ -1,28 +1,36 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { connectToNomba } from '../lib/nomba/auth'
-import { hasNombaCredentials } from '../lib/nomba/config'
+import {
+  issueDemoAccessToken,
+  issueAccessToken,
+  revokeAccessToken,
+  refreshAccessToken,
+} from '../lib/nomba/auth'
 import {
   clearSession,
   getStoredSession,
   isSessionConnected,
+  isTokenExpired,
 } from '../lib/nomba/tokenStore'
-import type { StoredNombaSession } from '../lib/nomba/types'
+import type { NombaCredentials, StoredNombaSession } from '../lib/nomba/types'
 
-export type NombaConnectionPhase = 'locked' | 'syncing' | 'connected'
+export type NombaConnectionPhase = 'locked' | 'connecting' | 'syncing' | 'connected'
 
 type NombaConnectionContextValue = {
   phase: NombaConnectionPhase
   hydrated: boolean
   isLocked: boolean
+  isConnecting: boolean
   isSyncing: boolean
   isConnected: boolean
   error: string | null
   session: StoredNombaSession | null
-  credentialsConfigured: boolean
+  // connect with user-supplied credentials
+  connectWithCredentials: (creds: NombaCredentials) => Promise<boolean>
+  // demo / fallback connect
+  connectDemo: () => Promise<boolean>
   startSync: () => void
-  authenticate: () => Promise<boolean>
   completeSync: () => void
-  resetConnection: () => void
+  disconnect: () => Promise<void>
   clearError: () => void
 }
 
@@ -34,23 +42,38 @@ export function NombaConnectionProvider({ children }: { children: React.ReactNod
   const [error, setError] = useState<string | null>(null)
   const [session, setSession] = useState<StoredNombaSession | null>(null)
 
+  // Restore session on mount, auto-refresh if expiring
   useEffect(() => {
-    if (isSessionConnected()) {
-      setPhase('connected')
-      setSession(getStoredSession())
+    const stored = getStoredSession()
+    if (isSessionConnected() && stored) {
+      if (isTokenExpired() && !stored.demoMode) {
+        // try silent refresh
+        refreshAccessToken().then((result) => {
+          if (result.ok) {
+            setSession(getStoredSession())
+            setPhase('connected')
+          } else {
+            clearSession()
+            setPhase('locked')
+          }
+          setHydrated(true)
+        })
+      } else {
+        setSession(stored)
+        setPhase('connected')
+        setHydrated(true)
+      }
+    } else {
+      setHydrated(true)
     }
-    setHydrated(true)
   }, [])
 
-  const startSync = useCallback(() => {
+  // Connect with merchant-supplied credentials
+  const connectWithCredentials = useCallback(async (creds: NombaCredentials): Promise<boolean> => {
     setError(null)
-    setPhase('syncing')
-  }, [])
+    setPhase('connecting')
 
-  const authenticate = useCallback(async () => {
-    setError(null)
-
-    const result = await connectToNomba({ allowDemo: !hasNombaCredentials() })
+    const result = await issueAccessToken(creds)
 
     if (!result.ok) {
       setError(result.error)
@@ -59,7 +82,30 @@ export function NombaConnectionProvider({ children }: { children: React.ReactNod
     }
 
     setSession(getStoredSession())
+    setPhase('syncing')
     return true
+  }, [])
+
+  // Demo/fallback connect (no real credentials)
+  const connectDemo = useCallback(async (): Promise<boolean> => {
+    setError(null)
+    setPhase('connecting')
+
+    const result = await issueDemoAccessToken()
+
+    if (!result.ok) {
+      setError(result.error)
+      setPhase('locked')
+      return false
+    }
+
+    setSession(getStoredSession())
+    setPhase('syncing')
+    return true
+  }, [])
+
+  const startSync = useCallback(() => {
+    setPhase('syncing')
   }, [])
 
   const completeSync = useCallback(() => {
@@ -67,8 +113,8 @@ export function NombaConnectionProvider({ children }: { children: React.ReactNod
     setSession(getStoredSession())
   }, [])
 
-  const resetConnection = useCallback(() => {
-    clearSession()
+  const disconnect = useCallback(async () => {
+    await revokeAccessToken()
     setSession(null)
     setError(null)
     setPhase('locked')
@@ -81,28 +127,19 @@ export function NombaConnectionProvider({ children }: { children: React.ReactNod
       phase,
       hydrated,
       isLocked: phase === 'locked',
+      isConnecting: phase === 'connecting',
       isSyncing: phase === 'syncing',
       isConnected: phase === 'connected',
       error,
       session,
-      credentialsConfigured: hasNombaCredentials(),
+      connectWithCredentials,
+      connectDemo,
       startSync,
-      authenticate,
       completeSync,
-      resetConnection,
+      disconnect,
       clearError,
     }),
-    [
-      phase,
-      hydrated,
-      error,
-      session,
-      startSync,
-      authenticate,
-      completeSync,
-      resetConnection,
-      clearError,
-    ],
+    [phase, hydrated, error, session, connectWithCredentials, connectDemo, startSync, completeSync, disconnect, clearError],
   )
 
   return (
@@ -111,9 +148,7 @@ export function NombaConnectionProvider({ children }: { children: React.ReactNod
 }
 
 export function useNombaConnection() {
-  const context = useContext(NombaConnectionContext)
-  if (!context) {
-    throw new Error('useNombaConnection must be used within NombaConnectionProvider')
-  }
-  return context
+  const ctx = useContext(NombaConnectionContext)
+  if (!ctx) throw new Error('useNombaConnection must be used within NombaConnectionProvider')
+  return ctx
 }

@@ -4,7 +4,7 @@ import { useNombaConnection } from '../context/NombaConnectionContext'
 import { merchant } from '../data/mockData'
 
 export default function Settings() {
-  const { isConnected, session, credentialsConfigured, resetConnection } = useNombaConnection()
+  const { isConnected, session, disconnect } = useNombaConnection()
 
   const integrationStatus = isConnected
     ? session?.demoMode
@@ -47,7 +47,7 @@ export default function Settings() {
         { label: 'Nomba Account', value: integrationStatus },
         {
           label: 'API Keys',
-          value: credentialsConfigured ? 'Configured in .env' : 'Not configured',
+          value: session && !session.demoMode ? 'Configured' : 'Demo mode',
         },
       ],
     },
@@ -131,7 +131,7 @@ export default function Settings() {
                   {isConnected && (
                     <button
                       type="button"
-                      onClick={resetConnection}
+                      onClick={disconnect}
                       className="text-xs font-semibold text-status-danger hover:underline"
                     >
                       Disconnect Nomba

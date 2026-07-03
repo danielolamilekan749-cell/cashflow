@@ -1,29 +1,28 @@
+import { supabase } from '../supabase/client'
+import { getNombaApiBase } from './config'
 import {
-  getNombaApiBase,
-  getNombaCredentials,
-  getNombaEnvironment,
-  hasNombaCredentials,
-} from './config'
-import type { NombaApiResponse, NombaAuthResult, NombaTokenResponse } from './types'
-import { saveAccessToken } from './tokenStore'
+  clearSession,
+  getAccessToken,
+  getRefreshToken,
+  getStoredSession,
+  saveAccessToken,
+} from './tokenStore'
+import type {
+  NombaApiResponse,
+  NombaAuthResult,
+  NombaCredentials,
+  NombaTokenResponse,
+} from './types'
 
-/**
- * Obtain a Nomba access token using client credentials.
- * @see https://developer.nomba.com/docs/getting-started/authentication
- * @see https://developer.nomba.com/docs/getting-started/get-api-keys
- */
-export async function issueAccessToken(): Promise<NombaAuthResult> {
-  const environment = getNombaEnvironment()
+// ─── Issue token ─────────────────────────────────────────────────────────────
+// POST https://api.nomba.com/v1/auth/token/issue
+// Headers: accountId
+// Body:    grant_type, client_id, client_secret
 
-  if (!hasNombaCredentials()) {
-    return {
-      ok: false,
-      error:
-        'Nomba sandbox credentials are not configured. Add VITE_NOMBA_CLIENT_ID, VITE_NOMBA_CLIENT_SECRET, and VITE_NOMBA_ACCOUNT_ID to your .env file.',
-    }
-  }
-
-  const { clientId, clientSecret, accountId } = getNombaCredentials()
+export async function issueAccessToken(
+  credentials: NombaCredentials,
+): Promise<NombaAuthResult> {
+  const { clientId, clientSecret, accountId } = credentials
   const baseUrl = getNombaApiBase()
 
   try {
@@ -45,27 +44,110 @@ export async function issueAccessToken(): Promise<NombaAuthResult> {
     if (!response.ok || payload.code !== '00' || !payload.data?.access_token) {
       return {
         ok: false,
-        error: payload.description || `Authentication failed (${response.status})`,
+        error: payload.description || `Authentication failed (HTTP ${response.status})`,
       }
     }
 
-    saveAccessToken(payload.data, environment)
-    return { ok: true, token: payload.data, environment }
-  } catch {
+    saveAccessToken(payload.data, 'sandbox', false, { clientId, accountId })
+    await persistSessionToSupabase({ clientId, accountId }, payload.data)
+
+    return { ok: true, token: payload.data, environment: 'sandbox' }
+  } catch (err) {
     return {
       ok: false,
       error:
-        'Could not reach the Nomba API. Check your network connection and ensure the dev proxy is running.',
+        'Could not reach the Nomba API. Check your credentials and network connection.',
     }
   }
 }
 
-/** Demo fallback for local UI testing when sandbox keys are not yet configured. */
+// ─── Refresh token ───────────────────────────────────────────────────────────
+// POST https://api.nomba.com/v1/auth/token/refresh
+// Headers: accountId, Authorization: Bearer <access_token>
+// Body:    refresh_token
+
+export async function refreshAccessToken(): Promise<NombaAuthResult> {
+  const session = getStoredSession()
+  const refreshToken = getRefreshToken()
+  const accessToken = getAccessToken()
+
+  if (!session?.accountId || !refreshToken || !accessToken) {
+    return { ok: false, error: 'No active session to refresh.' }
+  }
+
+  const baseUrl = getNombaApiBase()
+
+  try {
+    const response = await fetch(`${baseUrl}/v1/auth/token/refresh`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        accountId: session.accountId,
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    })
+
+    const payload = (await response.json()) as NombaApiResponse<NombaTokenResponse>
+
+    if (!response.ok || payload.code !== '00' || !payload.data?.access_token) {
+      return {
+        ok: false,
+        error: payload.description || `Token refresh failed (HTTP ${response.status})`,
+      }
+    }
+
+    saveAccessToken(payload.data, session.environment, false, {
+      clientId: session.clientId,
+      accountId: session.accountId,
+    })
+
+    return { ok: true, token: payload.data, environment: session.environment }
+  } catch {
+    return { ok: false, error: 'Token refresh failed. Please reconnect.' }
+  }
+}
+
+// ─── Revoke token ────────────────────────────────────────────────────────────
+// POST https://api.nomba.com/v1/auth/token/revoke
+// Headers: accountId, Authorization: Bearer <access_token>
+
+export async function revokeAccessToken(): Promise<boolean> {
+  const session = getStoredSession()
+  const accessToken = getAccessToken()
+
+  if (!session?.accountId || !accessToken) {
+    clearSession()
+    return true
+  }
+
+  const baseUrl = getNombaApiBase()
+
+  try {
+    await fetch(`${baseUrl}/v1/auth/token/revoke`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        accountId: session.accountId,
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+  } catch {
+    // best-effort — always clear locally
+  }
+
+  clearSession()
+  await removeSessionFromSupabase()
+  return true
+}
+
+// ─── Demo fallback ───────────────────────────────────────────────────────────
+
 export async function issueDemoAccessToken(): Promise<NombaAuthResult> {
-  await new Promise((resolve) => setTimeout(resolve, 600))
+  await new Promise((resolve) => setTimeout(resolve, 800))
 
   const demoToken: NombaTokenResponse = {
-    access_token: 'demo_sandbox_token',
+    access_token: 'demo_token',
     expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
   }
 
@@ -73,14 +155,36 @@ export async function issueDemoAccessToken(): Promise<NombaAuthResult> {
   return { ok: true, token: demoToken, environment: 'sandbox' }
 }
 
-export async function connectToNomba(options?: { allowDemo?: boolean }): Promise<NombaAuthResult> {
-  if (hasNombaCredentials()) {
-    return issueAccessToken()
-  }
+// ─── Supabase persistence ────────────────────────────────────────────────────
 
-  if (options?.allowDemo) {
-    return issueDemoAccessToken()
-  }
+async function persistSessionToSupabase(
+  credentials: Pick<NombaCredentials, 'clientId' | 'accountId'>,
+  token: NombaTokenResponse,
+): Promise<void> {
+  try {
+    const expiresAt = token.expiresAt
+      ?? (token.expires_in
+        ? new Date(Date.now() + token.expires_in * 1000).toISOString()
+        : null)
 
-  return issueAccessToken()
+    await supabase.from('nomba_sessions').upsert({
+      account_id: credentials.accountId,
+      client_id: credentials.clientId,
+      connected_at: new Date().toISOString(),
+      expires_at: expiresAt,
+      environment: 'sandbox',
+    }, { onConflict: 'account_id' })
+  } catch {
+    // non-fatal — local session is still valid
+  }
+}
+
+async function removeSessionFromSupabase(): Promise<void> {
+  const session = getStoredSession()
+  if (!session?.accountId) return
+  try {
+    await supabase.from('nomba_sessions').delete().eq('account_id', session.accountId)
+  } catch {
+    // non-fatal
+  }
 }
