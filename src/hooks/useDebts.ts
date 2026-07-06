@@ -1,8 +1,6 @@
 /**
- * useDebts — syncs debt records with Supabase.
- * Works in ALL modes: demo, sandbox, and authenticated.
- * Uses a stable merchant key (stored in localStorage) so debts
- * persist even in demo mode across page reloads.
+ * useDebts — persists debt records to Supabase.
+ * Logs every Supabase operation so you can see exactly what's happening.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -10,16 +8,19 @@ import { supabase } from '../lib/supabase/client'
 import { debts as mockDebts } from '../data/mockData'
 import type { Debt } from '../types'
 
-// Use a stable local key so demo users also get persistence
 const LOCAL_MERCHANT_KEY = 'cashflow-merchant-id'
 
-function getOrCreateMerchantId(accountId?: string): string {
-  if (accountId && accountId !== 'demo') return accountId
-  // For demo mode, generate a stable browser-local ID
-  const existing = localStorage.getItem(LOCAL_MERCHANT_KEY)
-  if (existing) return existing
-  const id = `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-  localStorage.setItem(LOCAL_MERCHANT_KEY, id)
+function getMerchantId(accountId?: string): string {
+  // If we have a real accountId (from Nomba), use it
+  if (accountId && accountId !== 'demo' && !accountId.startsWith('demo')) {
+    return accountId
+  }
+  // Otherwise create/reuse a stable browser ID so demo users keep their data
+  let id = localStorage.getItem(LOCAL_MERCHANT_KEY)
+  if (!id) {
+    id = `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    localStorage.setItem(LOCAL_MERCHANT_KEY, id)
+  }
   return id
 }
 
@@ -38,143 +39,130 @@ function toDebt(row: Record<string, unknown>): Debt {
   }
 }
 
-async function ensureMerchantProfile(merchantId: string) {
-  // Upsert a minimal merchant_profiles row so the FK constraint is satisfied
-  await supabase
-    .from('merchant_profiles')
-    .upsert({ account_id: merchantId, account_name: 'CashFlow Merchant' }, { onConflict: 'account_id' })
-}
-
 export function useDebts(accountId?: string) {
-  const merchantId = getOrCreateMerchantId(accountId)
-  const merchantIdRef = useRef(merchantId)
-  merchantIdRef.current = merchantId
+  const merchantId = getMerchantId(accountId)
+  const midRef = useRef(merchantId)
+  midRef.current = merchantId
 
   const [debts, setDebts] = useState<Debt[]>([])
   const [loading, setLoading] = useState(true)
-  const loadedRef = useRef(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const initialised = useRef(false)
 
-  // Load from Supabase on mount — always, regardless of demo/sandbox/real
+  // ── Load ────────────────────────────────────────────────────
   useEffect(() => {
-    if (loadedRef.current) return
-    loadedRef.current = true
+    if (initialised.current) return
+    initialised.current = true
 
-    setLoading(true)
+    console.log('[useDebts] Loading debts for merchant:', midRef.current)
 
     supabase
       .from('debts')
       .select('*')
-      .eq('merchant_account_id', merchantIdRef.current)
+      .eq('merchant_account_id', midRef.current)
       .order('created_at', { ascending: false })
       .then(({ data, error }) => {
-        if (!error && data && data.length > 0) {
-          setDebts(data.map(toDebt))
-        } else {
-          // First time — seed with mock debts and save them
+        if (error) {
+          console.error('[useDebts] Load error:', error.message, error.code, error.details)
+          // Table may not exist yet — show mock data
           setDebts(mockDebts)
-          seedMockDebts(merchantIdRef.current, mockDebts)
+        } else {
+          console.log('[useDebts] Loaded', data?.length ?? 0, 'debts from Supabase')
+          setDebts(data && data.length > 0 ? data.map(toDebt) : mockDebts)
+          // Seed DB on first visit if empty
+          if (!data || data.length === 0) {
+            seedMockDebts(midRef.current, mockDebts)
+          }
         }
         setLoading(false)
       })
-      .catch(() => {
-        setDebts(mockDebts)
-        setLoading(false)
-      })
   }, [])
 
-  // Add a new debt
+  // ── Add ─────────────────────────────────────────────────────
   const addDebt = useCallback(async (debt: Omit<Debt, 'id'>) => {
-    const optimisticId = `opt_${Date.now()}`
-    const optimistic: Debt = { ...debt, id: optimisticId }
-    setDebts((prev) => [optimistic, ...prev])
+    setSaveError(null)
 
-    try {
-      await ensureMerchantProfile(merchantIdRef.current)
+    // Optimistic UI — show immediately
+    const tempId = `temp_${Date.now()}`
+    setDebts((prev) => [{ ...debt, id: tempId }, ...prev])
 
-      const { data, error } = await supabase
-        .from('debts')
-        .insert({
-          merchant_account_id: merchantIdRef.current,
-          customer_name: debt.customerName,
-          phone: debt.phone ?? null,
-          amount: debt.amount,
-          collected_date: debt.collectedDate,
-          due_date: debt.dueDate,
-          installment_progress: debt.installmentProgress,
-          reminder_status: debt.reminderStatus,
-          category: debt.category,
-          notes: debt.notes ?? null,
-        })
-        .select()
-        .single()
+    console.log('[useDebts] Inserting debt for merchant:', midRef.current, debt.customerName)
 
-      if (!error && data) {
-        setDebts((prev) =>
-          prev.map((d) => (d.id === optimisticId ? toDebt(data) : d)),
-        )
-      } else if (error) {
-        console.error('Supabase insert error:', error.message)
-      }
-    } catch (err) {
-      console.error('Failed to save debt to Supabase:', err)
-      // Keep optimistic update — debt still shows in UI
+    const { data, error } = await supabase
+      .from('debts')
+      .insert({
+        merchant_account_id: midRef.current,
+        customer_name: debt.customerName,
+        phone: debt.phone ?? null,
+        amount: debt.amount,
+        collected_date: debt.collectedDate,
+        due_date: debt.dueDate,
+        installment_progress: debt.installmentProgress,
+        reminder_status: debt.reminderStatus,
+        category: debt.category,
+        notes: debt.notes ?? null,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('[useDebts] Insert error:', error.message, '| code:', error.code, '| hint:', error.hint)
+      setSaveError(`Failed to save: ${error.message}`)
+      // Revert optimistic update
+      setDebts((prev) => prev.filter((d) => d.id !== tempId))
+    } else {
+      console.log('[useDebts] Saved successfully, db id:', data.id)
+      // Replace temp id with real db id
+      setDebts((prev) => prev.map((d) => (d.id === tempId ? toDebt(data) : d)))
     }
   }, [])
 
-  // Mark as paid
+  // ── Mark Paid ────────────────────────────────────────────────
   const markPaid = useCallback(async (id: string) => {
     setDebts((prev) =>
       prev.map((d) =>
-        d.id === id
-          ? { ...d, category: 'paid', installmentProgress: 100, reminderStatus: 'sent' }
-          : d,
+        d.id === id ? { ...d, category: 'paid', installmentProgress: 100, reminderStatus: 'sent' } : d,
       ),
     )
 
-    try {
-      await supabase
-        .from('debts')
-        .update({ category: 'paid', installment_progress: 100, reminder_status: 'sent' })
-        .eq('id', id)
-    } catch (err) {
-      console.error('Failed to mark debt paid in Supabase:', err)
-    }
+    const { error } = await supabase
+      .from('debts')
+      .update({ category: 'paid', installment_progress: 100, reminder_status: 'sent' })
+      .eq('id', id)
+
+    if (error) console.error('[useDebts] markPaid error:', error.message)
+    else console.log('[useDebts] Marked paid in Supabase:', id)
   }, [])
 
-  // Delete a debt
+  // ── Delete ───────────────────────────────────────────────────
   const deleteDebt = useCallback(async (id: string) => {
     setDebts((prev) => prev.filter((d) => d.id !== id))
 
-    try {
-      await supabase.from('debts').delete().eq('id', id)
-    } catch (err) {
-      console.error('Failed to delete debt from Supabase:', err)
-    }
+    const { error } = await supabase.from('debts').delete().eq('id', id)
+    if (error) console.error('[useDebts] delete error:', error.message)
+    else console.log('[useDebts] Deleted from Supabase:', id)
   }, [])
 
-  return { debts, loading, addDebt, markPaid, deleteDebt }
+  return { debts, loading, saveError, addDebt, markPaid, deleteDebt }
 }
 
-// Seed the DB with mock debts on first visit
 async function seedMockDebts(merchantId: string, debts: Debt[]) {
-  try {
-    await ensureMerchantProfile(merchantId)
-    await supabase.from('debts').insert(
-      debts.map((d) => ({
-        id: d.id,
-        merchant_account_id: merchantId,
-        customer_name: d.customerName,
-        phone: d.phone ?? null,
-        amount: d.amount,
-        collected_date: d.collectedDate,
-        due_date: d.dueDate,
-        installment_progress: d.installmentProgress,
-        reminder_status: d.reminderStatus,
-        category: d.category,
-        notes: d.notes ?? null,
-      })),
-    )
-  } catch {
-    // Non-fatal — UI already has the mock data in state
-  }
+  console.log('[useDebts] Seeding mock debts for first visit...')
+  const { error } = await supabase.from('debts').insert(
+    debts.map((d) => ({
+      id: d.id,
+      merchant_account_id: merchantId,
+      customer_name: d.customerName,
+      phone: d.phone ?? null,
+      amount: d.amount,
+      collected_date: d.collectedDate,
+      due_date: d.dueDate,
+      installment_progress: d.installmentProgress,
+      reminder_status: d.reminderStatus,
+      category: d.category,
+      notes: d.notes ?? null,
+    })),
+  )
+  if (error) console.error('[useDebts] Seed error:', error.message, error.code)
+  else console.log('[useDebts] Mock debts seeded successfully')
 }
