@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNombaData } from '../hooks/useNombaData'
 import { useNombaConnection } from '../context/NombaConnectionContext'
 import { customers as mockCustomers } from '../data/mockData'
+import { sendToGroq } from '../lib/ai/groq'
 import { formatCompact } from '../utils/format'
 import type { Customer } from '../types'
 import type { NombaTransaction } from '../lib/nomba/api'
@@ -97,15 +98,14 @@ export default function Customers() {
     insightGenerated.current = true
     setInsightLoading(true)
 
-    const { sendToGroq } = require('../lib/ai/groq')
     const top3 = liveCustomers.slice(0, 3)
     const prompt = `Give a 2-sentence AI insight about this merchant's customer base. Top customers: ${top3.map((c, i) => `${i + 1}. ${c.name} (${c.tier}, ₦${c.totalSpend.toLocaleString()} spend, health ${c.healthScore}/100)`).join('; ')}. Total customers: ${liveCustomers.length}, avg health: ${avgHealth}/100. Be specific and actionable.`
 
     sendToGroq([{ role: 'user', content: prompt }])
-      .then((r: string) => setAiInsight(r))
+      .then((r) => setAiInsight(r))
       .catch(() => setAiInsight(null))
       .finally(() => setInsightLoading(false))
-  }, [liveCustomers])
+  }, [liveCustomers, avgHealth])
 
   const filters: { key: TierFilter; label: string }[] = [
     { key: 'all', label: 'All' },
