@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Modal from '../components/ui/Modal'
-import { debts as initialDebts } from '../data/mockData'
+import { useDebts } from '../hooks/useDebts'
 import { sendToGroq } from '../lib/ai/groq'
 import type { Debt } from '../types'
 import { formatCurrency } from '../utils/format'
@@ -125,7 +125,7 @@ function AIDebtReminder({ debts }: { debts: Debt[] }) {
 }
 
 export default function DebtTracker() {
-  const [debtList, setDebtList] = useState<Debt[]>(initialDebts)
+  const { debts: debtList, addDebt, markPaid: markPaidDB, deleteDebt } = useDebts()
   const [filter, setFilter] = useState<DebtFilter>('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(emptyForm)
@@ -151,13 +151,7 @@ export default function DebtTracker() {
 
   // Mark as paid
   const markPaid = (id: string, name: string) => {
-    setDebtList((prev) =>
-      prev.map((d) =>
-        d.id === id
-          ? { ...d, category: 'paid', installmentProgress: 100, reminderStatus: 'sent' }
-          : d,
-      ),
-    )
+    markPaidDB(id)
     setPaidToast(`${name} marked as paid ✓`)
     setTimeout(() => setPaidToast(null), 3000)
   }
@@ -191,8 +185,7 @@ export default function DebtTracker() {
     if (!form.customerName || !amount || !form.collectedDate || !form.dueDate) return
 
     const category = deriveCategory(form.dueDate)
-    const newDebt: Debt = {
-      id: Date.now().toString(),
+    addDebt({
       customerName: form.customerName.trim(),
       phone: form.phone.trim() || undefined,
       amount,
@@ -202,8 +195,7 @@ export default function DebtTracker() {
       reminderStatus: category === 'overdue' ? 'overdue' : 'pending',
       category,
       notes: form.notes.trim() || undefined,
-    }
-    setDebtList((prev) => [newDebt, ...prev])
+    })
     setForm(emptyForm)
     setModalOpen(false)
   }
