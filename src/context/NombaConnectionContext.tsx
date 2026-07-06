@@ -42,19 +42,26 @@ export function NombaConnectionProvider({ children }: { children: React.ReactNod
   const [error, setError] = useState<string | null>(null)
   const [session, setSession] = useState<StoredNombaSession | null>(null)
 
-  // Restore session on mount, auto-refresh if expiring
+  // Restore session on mount, auto-refresh if expiring.
+  // If no session exists, automatically start in demo mode so the
+  // dashboard loads immediately — no credentials required.
   useEffect(() => {
     const stored = getStoredSession()
     if (isSessionConnected() && stored) {
       if (isTokenExpired() && !stored.demoMode) {
-        // try silent refresh
         refreshAccessToken().then((result) => {
           if (result.ok) {
             setSession(getStoredSession())
             setPhase('connected')
           } else {
             clearSession()
-            setPhase('locked')
+            // expired real session → auto-demo
+            issueDemoAccessToken().then(() => {
+              setSession(getStoredSession())
+              setPhase('connected')
+              setHydrated(true)
+            })
+            return
           }
           setHydrated(true)
         })
@@ -64,7 +71,12 @@ export function NombaConnectionProvider({ children }: { children: React.ReactNod
         setHydrated(true)
       }
     } else {
-      setHydrated(true)
+      // No session at all — boot into demo mode automatically
+      issueDemoAccessToken().then(() => {
+        setSession(getStoredSession())
+        setPhase('connected')
+        setHydrated(true)
+      })
     }
   }, [])
 

@@ -9,34 +9,31 @@ import {
   KeyRound,
   ShieldCheck,
   Sparkles,
+  X,
   Zap,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useNombaConnection } from '../../context/NombaConnectionContext'
 import NombaSyncAnimation from './NombaSyncAnimation'
 
-type NombaConnectOverlayProps = {
-  children: React.ReactNode
-}
-
 type Step = 'intro' | 'credentials' | 'syncing' | 'done'
-
 const DOCS_URL = 'https://developer.nomba.com/docs/getting-started/get-api-keys'
 
-export default function NombaConnectOverlay({ children }: NombaConnectOverlayProps) {
+export default function NombaConnectOverlay({ children }: { children: React.ReactNode }) {
   const {
     hydrated,
-    isLocked,
     isConnecting,
     isSyncing,
+    isConnected,
     error,
     session,
     connectWithCredentials,
-    connectDemo,
     completeSync,
     clearError,
   } = useNombaConnection()
 
+  const [modalOpen, setModalOpen] = useState(false)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
   const [step, setStep] = useState<Step>('intro')
   const [clientId, setClientId] = useState('')
   const [clientSecret, setClientSecret] = useState('')
@@ -44,9 +41,11 @@ export default function NombaConnectOverlay({ children }: NombaConnectOverlayPro
   const [showSecret, setShowSecret] = useState(false)
   const [fieldError, setFieldError] = useState('')
 
-  if (!hydrated) return <>{children}</>
+  const isDemo = session?.demoMode ?? true
+  const showBanner = hydrated && isConnected && isDemo && !bannerDismissed
 
-  const showOverlay = isLocked || isConnecting || (isSyncing && step === 'syncing')
+  const openModal = () => { setModalOpen(true); setStep('intro') }
+  const closeModal = () => { setModalOpen(false); setFieldError(''); clearError() }
 
   const handleCredentialSubmit = async () => {
     if (!clientId.trim() || !clientSecret.trim() || !accountId.trim()) {
@@ -55,56 +54,76 @@ export default function NombaConnectOverlay({ children }: NombaConnectOverlayPro
     }
     setFieldError('')
     clearError()
-
     const ok = await connectWithCredentials({
       clientId: clientId.trim(),
       clientSecret: clientSecret.trim(),
       accountId: accountId.trim(),
     })
-
-    if (ok) setStep('syncing')
-  }
-
-  const handleDemo = async () => {
-    clearError()
-    const ok = await connectDemo()
     if (ok) setStep('syncing')
   }
 
   const handleSyncComplete = () => {
     setStep('done')
     completeSync()
+    // auto-close after 1.8s
+    setTimeout(() => setModalOpen(false), 1800)
   }
+
+  if (!hydrated) return <>{children}</>
 
   return (
     <div className="relative">
-      {/* Blur the dashboard behind when locked */}
-      <motion.div
-        animate={{
-          filter: showOverlay ? 'blur(6px)' : 'blur(0px)',
-          opacity: showOverlay ? 0.5 : 1,
-          scale: showOverlay ? 0.985 : 1,
-        }}
-        transition={{ duration: 0.5, ease: 'easeOut' }}
-        className={showOverlay ? 'pointer-events-none select-none' : ''}
-        aria-hidden={showOverlay}
-      >
-        {children}
-      </motion.div>
+      {/* Dashboard always visible — no blur, no block */}
+      {children}
 
+      {/* ── Demo mode banner ─────────────────────────────────── */}
       <AnimatePresence>
-        {showOverlay && (
+        {showBanner && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="fixed inset-x-4 top-4 z-[60] mx-auto max-w-lg"
+          >
+            <div className="flex items-center gap-3 rounded-2xl border border-brand-yellow/30 bg-white/95 px-4 py-3 shadow-xl backdrop-blur-xl">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand-yellow/15">
+                <Zap className="h-4 w-4 text-brand-yellow-dark" fill="currentColor" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-ink-black">Demo mode — sample data</p>
+                <p className="text-[11px] text-ink-muted">Connect your Nomba account to see live figures</p>
+              </div>
+              <button
+                onClick={openModal}
+                className="shrink-0 rounded-xl bg-brand-yellow px-3 py-1.5 text-xs font-bold text-ink-black transition-all hover:bg-brand-yellow-dark"
+              >
+                Connect
+              </button>
+              <button
+                onClick={() => setBannerDismissed(true)}
+                className="shrink-0 text-ink-light hover:text-ink-muted"
+                aria-label="Dismiss"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Connect modal (optional, non-blocking) ───────────── */}
+      <AnimatePresence>
+        {modalOpen && (
           <>
-            {/* Backdrop */}
             <motion.div
               key="backdrop"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[70] bg-ink-black/35 backdrop-blur-[2px]"
+              className="fixed inset-0 z-[70] bg-ink-black/40 backdrop-blur-sm"
+              onClick={closeModal}
             />
 
-            {/* Modal */}
             <motion.div
               key="modal"
               initial={{ opacity: 0, scale: 0.93, y: 28 }}
@@ -113,8 +132,16 @@ export default function NombaConnectOverlay({ children }: NombaConnectOverlayPro
               transition={{ type: 'spring', damping: 26, stiffness: 280 }}
               className="fixed left-4 right-4 top-[8%] z-[71] mx-auto max-w-md rounded-2xl border border-gray-100 bg-white shadow-2xl sm:top-[12%]"
             >
+              {/* Close btn */}
+              <button
+                onClick={closeModal}
+                className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-xl text-ink-light hover:bg-surface-muted"
+              >
+                <X className="h-4 w-4" />
+              </button>
+
               <AnimatePresence mode="wait">
-                {/* ── Step 1: Intro ───────────────────────────────────── */}
+                {/* Step 1 — Intro */}
                 {step === 'intro' && (
                   <motion.div
                     key="intro"
@@ -123,7 +150,6 @@ export default function NombaConnectOverlay({ children }: NombaConnectOverlayPro
                     exit={{ opacity: 0, x: -20 }}
                     className="p-7 sm:p-8"
                   >
-                    {/* Icon */}
                     <div className="mb-5 flex justify-center">
                       <div className="relative">
                         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-yellow/15">
@@ -139,14 +165,11 @@ export default function NombaConnectOverlay({ children }: NombaConnectOverlayPro
                       </div>
                     </div>
 
-                    <h2 className="text-center text-xl font-bold text-ink-black">
-                      Connect with Nomba
-                    </h2>
+                    <h2 className="text-center text-xl font-bold text-ink-black">Connect with Nomba</h2>
                     <p className="mx-auto mt-2 max-w-xs text-center text-sm leading-relaxed text-ink-muted">
-                      Link your Nomba account to sync real-time transactions, sales, and customer data into CashFlow AI.
+                      Link your Nomba account to replace sample data with your real transactions, balance, and sales.
                     </p>
 
-                    {/* Feature pills */}
                     <div className="mt-5 grid grid-cols-3 gap-2">
                       {[
                         { icon: Zap, label: 'Live sync' },
@@ -160,29 +183,34 @@ export default function NombaConnectOverlay({ children }: NombaConnectOverlayPro
                       ))}
                     </div>
 
-                    {/* Primary CTA */}
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setStep('credentials')}
                       className="btn-primary mt-6 w-full py-3 text-sm"
                     >
-                      Connect with Nomba
+                      I have API keys
                       <ChevronRight className="h-4 w-4" />
                     </motion.button>
 
-                    {/* Demo fallback */}
-                    <button
-                      onClick={handleDemo}
-                      disabled={isConnecting}
-                      className="mt-3 w-full rounded-xl py-2.5 text-xs font-medium text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink-charcoal"
-                    >
-                      {isConnecting ? 'Loading demo...' : 'Continue in demo mode (no account needed)'}
-                    </button>
+                    <div className="mt-4 rounded-xl border border-brand-yellow/20 bg-brand-yellow/8 px-4 py-3">
+                      <p className="text-xs font-semibold text-ink-charcoal">Don't have keys yet?</p>
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-ink-muted">
+                        Sign up at nomba.com → Settings → Developer → Create API Client. You'll get your Account ID, Client ID and Client Secret.
+                      </p>
+                      <a
+                        href={DOCS_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-yellow-dark hover:underline"
+                      >
+                        Get your keys <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
                   </motion.div>
                 )}
 
-                {/* ── Step 2: Credentials ─────────────────────────────── */}
+                {/* Step 2 — Credentials */}
                 {step === 'credentials' && (
                   <motion.div
                     key="credentials"
@@ -212,46 +240,36 @@ export default function NombaConnectOverlay({ children }: NombaConnectOverlayPro
                     >
                       <div className="flex items-center gap-2">
                         <KeyRound className="h-4 w-4 text-brand-yellow-dark" />
-                        <span className="text-xs font-semibold text-ink-charcoal">
-                          Where do I find my keys?
-                        </span>
+                        <span className="text-xs font-semibold text-ink-charcoal">Where do I find my keys?</span>
                       </div>
                       <ExternalLink className="h-3.5 w-3.5 text-ink-muted" />
                     </a>
 
                     <div className="space-y-3">
                       <div>
-                        <label className="mb-1.5 block text-xs font-semibold text-ink-charcoal">
-                          Account ID
-                        </label>
+                        <label className="mb-1.5 block text-xs font-semibold text-ink-charcoal">Account ID</label>
                         <input
                           type="text"
-                          placeholder="e.g. 01HXYZ..."
+                          placeholder="e.g. 890022ce-bae0-45c1..."
                           value={accountId}
                           onChange={(e) => { setAccountId(e.target.value); setFieldError('') }}
                           className="input-base font-mono text-sm"
                           autoComplete="off"
                         />
                       </div>
-
                       <div>
-                        <label className="mb-1.5 block text-xs font-semibold text-ink-charcoal">
-                          Client ID
-                        </label>
+                        <label className="mb-1.5 block text-xs font-semibold text-ink-charcoal">Client ID</label>
                         <input
                           type="text"
-                          placeholder="e.g. client_..."
+                          placeholder="e.g. 2242b79d-f2cf-4ccc..."
                           value={clientId}
                           onChange={(e) => { setClientId(e.target.value); setFieldError('') }}
                           className="input-base font-mono text-sm"
                           autoComplete="off"
                         />
                       </div>
-
                       <div>
-                        <label className="mb-1.5 block text-xs font-semibold text-ink-charcoal">
-                          Client Secret
-                        </label>
+                        <label className="mb-1.5 block text-xs font-semibold text-ink-charcoal">Client Secret</label>
                         <div className="relative">
                           <input
                             type={showSecret ? 'text' : 'password'}
@@ -272,24 +290,18 @@ export default function NombaConnectOverlay({ children }: NombaConnectOverlayPro
                       </div>
                     </div>
 
-                    {/* Field error */}
                     {fieldError && (
                       <div className="mt-3 flex items-center gap-2 text-xs text-status-danger">
-                        <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                        {fieldError}
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {fieldError}
                       </div>
                     )}
-
-                    {/* API error */}
                     {error && (
                       <div className="mt-3 flex items-start gap-2 rounded-xl border border-status-danger/20 bg-status-danger-soft px-4 py-3">
                         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-status-danger" />
                         <div>
                           <p className="text-xs font-semibold text-status-danger">Connection failed</p>
                           <p className="mt-0.5 text-xs text-ink-charcoal">{error}</p>
-                          <button onClick={clearError} className="mt-1.5 text-xs font-semibold text-brand-yellow-dark hover:underline">
-                            Dismiss
-                          </button>
+                          <button onClick={clearError} className="mt-1.5 text-xs font-semibold text-brand-yellow-dark hover:underline">Dismiss</button>
                         </div>
                       </div>
                     )}
@@ -303,15 +315,14 @@ export default function NombaConnectOverlay({ children }: NombaConnectOverlayPro
                     >
                       {isConnecting ? 'Authenticating...' : 'Connect & sync data'}
                     </motion.button>
-
                     <p className="mt-3 text-center text-[11px] text-ink-light">
-                      Keys are stored only in your browser session — never sent to our servers
+                      Keys stored in browser session only — never sent to our servers
                     </p>
                   </motion.div>
                 )}
 
-                {/* ── Step 3: Syncing ─────────────────────────────────── */}
-                {step === 'syncing' && (
+                {/* Step 3 — Syncing */}
+                {(step === 'syncing' || (isSyncing && step === 'syncing')) && (
                   <motion.div
                     key="syncing"
                     initial={{ opacity: 0, x: 20 }}
@@ -319,19 +330,11 @@ export default function NombaConnectOverlay({ children }: NombaConnectOverlayPro
                     exit={{ opacity: 0, x: -20 }}
                     className="p-7 sm:p-8"
                   >
-                    <NombaSyncAnimation
-                      onAuthenticate={async () => true}
-                      onComplete={handleSyncComplete}
-                    />
-                    {session?.demoMode && (
-                      <p className="mt-2 text-center text-[11px] font-medium text-ink-light">
-                        Running in demo mode — no real credentials used
-                      </p>
-                    )}
+                    <NombaSyncAnimation onAuthenticate={async () => true} onComplete={handleSyncComplete} />
                   </motion.div>
                 )}
 
-                {/* ── Step 4: Done ────────────────────────────────────── */}
+                {/* Step 4 — Done */}
                 {step === 'done' && (
                   <motion.div
                     key="done"
@@ -349,7 +352,7 @@ export default function NombaConnectOverlay({ children }: NombaConnectOverlayPro
                     </motion.div>
                     <h2 className="text-xl font-bold text-ink-black">You're connected!</h2>
                     <p className="mx-auto mt-2 max-w-xs text-sm text-ink-muted">
-                      Your Nomba account is synced. Your dashboard is now live with real data.
+                      Your Nomba account is synced. Dashboard is now showing live data.
                     </p>
                   </motion.div>
                 )}
