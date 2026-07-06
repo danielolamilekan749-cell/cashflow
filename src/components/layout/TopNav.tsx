@@ -1,18 +1,25 @@
 import { Bell, Bot, Search, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { merchant } from '../../data/mockData'
-import { useNombaConnection } from '../../context/NombaConnectionContext'
+import { useMerchant } from '../../hooks/useMerchant'
+import { useNombaData } from '../../hooks/useNombaData'
 import { formatCurrency } from '../../utils/format'
 
 export default function TopNav() {
   const hour = new Date().getHours()
-  const greeting =
-    hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening'
+  const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening'
 
-  const { session, isConnected } = useNombaConnection()
-  const isDemo = session?.demoMode ?? true
-  const isSandbox = isConnected && !isDemo && session?.clientId === 'sandbox'
-  const isReal = isConnected && !isDemo && session?.clientId !== 'sandbox'
+  const merchant = useMerchant()
+  const nomba = useNombaData()
+
+  // Today's revenue: use live data if available, else 0 (not fake ₦284k)
+  const todayRevenue = (() => {
+    if (merchant.isDemo) return null
+    const today = new Date().toDateString()
+    const total = nomba.transactions
+      .filter(t => t.status === 'SUCCESS' && new Date(t.timeCreated).toDateString() === today)
+      .reduce((s, t) => s + t.amount, 0)
+    return total
+  })()
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/20 bg-white/70 backdrop-blur-xl lg:border-gray-100/80 lg:bg-white/80">
@@ -23,18 +30,17 @@ export default function TopNav() {
           </p>
           <div className="flex items-center gap-2">
             <p className="text-xs text-ink-muted">{merchant.name}</p>
-            {/* Connection status pill */}
-            {isReal && (
+            {merchant.isLive && (
               <span className="rounded-full bg-status-success-soft px-2 py-0.5 text-[10px] font-bold text-status-success">
                 ● Live
               </span>
             )}
-            {isSandbox && (
+            {merchant.isSandbox && (
               <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600">
                 ● Sandbox
               </span>
             )}
-            {isDemo && (
+            {merchant.isDemo && (
               <span className="rounded-full bg-brand-yellow/15 px-2 py-0.5 text-[10px] font-bold text-brand-yellow-dark">
                 Demo
               </span>
@@ -52,13 +58,16 @@ export default function TopNav() {
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="hidden items-center gap-1.5 rounded-xl bg-brand-yellow/15 px-3 py-1.5 sm:flex">
-            <Sparkles className="h-3.5 w-3.5 text-brand-yellow-dark" />
-            <span className="text-xs font-bold text-ink-black">
-              {formatCurrency(merchant.todayRevenue)}
-            </span>
-            <span className="text-[10px] font-medium text-ink-muted">today</span>
-          </div>
+          {/* Today's revenue — only show when real data is available */}
+          {todayRevenue !== null && (
+            <div className="hidden items-center gap-1.5 rounded-xl bg-brand-yellow/15 px-3 py-1.5 sm:flex">
+              <Sparkles className="h-3.5 w-3.5 text-brand-yellow-dark" />
+              <span className="text-xs font-bold text-ink-black">
+                {formatCurrency(todayRevenue)}
+              </span>
+              <span className="text-[10px] font-medium text-ink-muted">today</span>
+            </div>
+          )}
 
           <Link
             to="/ai-assistant"
@@ -87,7 +96,9 @@ export default function TopNav() {
             />
             <div className="hidden sm:block">
               <p className="text-xs font-semibold text-ink-black">{merchant.owner}</p>
-              <p className="text-[10px] text-ink-muted">View profile</p>
+              <p className="text-[10px] text-ink-muted">
+                {merchant.isDemo ? 'Connect Nomba' : 'View profile'}
+              </p>
             </div>
           </Link>
         </div>

@@ -2,20 +2,19 @@ import { motion } from 'framer-motion'
 import { Bell, Building2, CreditCard, ExternalLink, Monitor, Shield, User } from 'lucide-react'
 import { useNombaConnection } from '../context/NombaConnectionContext'
 import { useNombaData } from '../hooks/useNombaData'
-import { merchant } from '../data/mockData'
+import { useMerchant } from '../hooks/useMerchant'
 import { useState } from 'react'
 
 export default function Settings() {
   const { isConnected, session, disconnect } = useNombaConnection()
   const nomba = useNombaData()
+  const merchant = useMerchant()
 
-  const isDemo = session?.demoMode ?? true
-  const liveAccount = !isDemo && nomba.account
+  const isDemo = merchant.isDemo
+  const liveAccount = !isDemo ? nomba.account : null
 
   const integrationStatus = isConnected
-    ? session?.demoMode
-      ? 'Demo mode'
-      : `Connected · ${session?.environment ?? 'sandbox'}`
+    ? isDemo ? 'Demo mode' : `Connected · ${session?.environment ?? 'sandbox'}`
     : 'Not connected'
 
   const [toggles, setToggles] = useState([
@@ -39,24 +38,22 @@ export default function Settings() {
         <p className="mt-1 text-sm text-ink-muted">Manage your account and preferences</p>
       </div>
 
-      {/* Profile card — uses live data if available */}
+      {/* Profile card */}
       <div className="flex items-center gap-4 rounded-card border border-gray-100 bg-white p-5 shadow-card">
         <img
           src={merchant.avatar}
-          alt={liveAccount?.accountName ?? merchant.owner}
+          alt={merchant.owner}
           className="h-16 w-16 rounded-2xl bg-surface-muted"
         />
         <div>
-          <h2 className="text-lg font-bold text-ink-black">
-            {liveAccount?.accountName ?? merchant.owner}
-          </h2>
-          <p className="text-sm text-ink-muted">{merchant.name}</p>
+          <h2 className="text-lg font-bold text-ink-black">{merchant.name}</h2>
+          <p className="text-sm text-ink-muted">{merchant.accountId || 'Not connected'}</p>
           <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-            isConnected && !isDemo
-              ? 'bg-status-success-soft text-status-success'
-              : 'bg-brand-yellow/15 text-brand-yellow-dark'
+            merchant.isLive ? 'bg-status-success-soft text-status-success' :
+            merchant.isSandbox ? 'bg-blue-50 text-blue-600' :
+            'bg-brand-yellow/15 text-brand-yellow-dark'
           }`}>
-            {isConnected && !isDemo ? '● Live' : 'Nomba Merchant'}
+            {merchant.isLive ? '● Live' : merchant.isSandbox ? '● Sandbox' : 'Demo mode'}
           </span>
         </div>
       </div>
@@ -69,9 +66,9 @@ export default function Settings() {
         </div>
         <div className="space-y-3">
           {[
-            { label: 'Business Name', value: liveAccount?.accountName ?? merchant.name },
-            { label: 'Account ID', value: session?.accountId ?? '—' },
-            { label: 'Status', value: liveAccount?.status ?? 'Unknown' },
+            { label: 'Business Name', value: merchant.name },
+            { label: 'Account ID', value: merchant.accountId || '—' },
+            { label: 'Status', value: liveAccount?.status ?? (isDemo ? 'Demo' : '—') },
             { label: 'Currency', value: liveAccount?.currency ?? 'NGN' },
           ].map((f) => (
             <div key={f.label} className="flex items-center justify-between rounded-xl bg-surface-off px-4 py-3">
@@ -97,8 +94,8 @@ export default function Settings() {
         </div>
         <div className="space-y-3">
           {[
-            { label: 'Email', value: liveAccount?.email ?? 'daniel@provisions.ng' },
-            { label: 'Phone', value: liveAccount?.phoneNumber ?? '+234 801 234 5678' },
+            { label: 'Email', value: merchant.email },
+            { label: 'Phone', value: merchant.phone },
           ].map((f) => (
             <div key={f.label} className="flex items-center justify-between rounded-xl bg-surface-off px-4 py-3">
               <span className="text-sm text-ink-muted">{f.label}</span>

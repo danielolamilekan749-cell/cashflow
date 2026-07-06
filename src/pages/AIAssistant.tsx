@@ -1,9 +1,9 @@
-import { motion, AnimatePresence } from 'framer-motion'
-import { Bot, Send, Sparkles, RefreshCw, AlertCircle } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { AlertCircle, Bot, RefreshCw, Send, Sparkles } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { sendToGroq, type AIMessage } from '../lib/ai/groq'
 import { useNombaData } from '../hooks/useNombaData'
-import { useNombaConnection } from '../context/NombaConnectionContext'
+import { useMerchant } from '../hooks/useMerchant'
 import type { ChatMessage } from '../types'
 
 const SUGGESTED = [
@@ -22,14 +22,18 @@ function formatContent(text: string) {
 }
 
 export default function AIAssistant() {
-  const { session } = useNombaConnection()
+  const merchant = useMerchant()
   const nomba = useNombaData()
+
+  const liveBalance = nomba.balance ? parseFloat(nomba.balance.amount) : undefined
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
       role: 'assistant',
-      content: `Hello ${session?.clientId ? 'there' : 'Daniel'}! 👋 I'm your CashFlow AI assistant, powered by Groq.\n\nI have full access to your business data — sales, customers, products, debts, and live transactions. Ask me anything and I'll give you real, data-driven answers.`,
+      content: merchant.isDemo
+        ? `Hello! 👋 I'm CashFlow AI, powered by Groq.\n\nYou're in **demo mode** — I'm using sample data. Connect your Nomba account for real, live answers about your actual business.\n\nTry asking me something!`
+        : `Hello, ${merchant.owner}! 👋 I'm CashFlow AI, powered by Groq.\n\nConnected to your **${merchant.isSandbox ? 'Nomba sandbox' : 'Nomba live'}** account (${merchant.name}). I have your real transaction data — ${nomba.transactions.length} transactions loaded. Ask me anything!`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ])
@@ -38,8 +42,6 @@ export default function AIAssistant() {
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-
-  // Keep conversation history for Groq (last 10 exchanges)
   const historyRef = useRef<AIMessage[]>([])
 
   useEffect(() => {
@@ -61,34 +63,32 @@ export default function AIAssistant() {
     setTyping(true)
     setError(null)
 
-    // Add to history
     historyRef.current = [
-      ...historyRef.current.slice(-18), // keep last 9 exchanges (18 msgs)
+      ...historyRef.current.slice(-18),
       { role: 'user', content: text.trim() },
     ]
 
     try {
-      const reply = await sendToGroq(
-        historyRef.current,
-        nomba.transactions.length > 0 ? nomba.transactions : undefined,
-      )
+      const reply = await sendToGroq(historyRef.current, {
+        merchant,
+        liveTransactions: nomba.transactions.length > 0 ? nomba.transactions : undefined,
+        liveBalance,
+      })
 
-      historyRef.current = [
-        ...historyRef.current,
-        { role: 'assistant', content: reply },
-      ]
+      historyRef.current = [...historyRef.current, { role: 'assistant', content: reply }]
 
-      const aiMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: reply,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      }
-      setMessages((prev) => [...prev, aiMsg])
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: reply,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ])
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : 'Something went wrong'
-      setError(errMsg)
-      // Remove the user message on error so they can retry
+      const msg = err instanceof Error ? err.message : 'Something went wrong'
+      setError(msg)
       setMessages((prev) => prev.slice(0, -1))
       historyRef.current = historyRef.current.slice(0, -1)
       setInput(text)
@@ -104,7 +104,7 @@ export default function AIAssistant() {
       {
         id: Date.now().toString(),
         role: 'assistant',
-        content: "Chat cleared! I still have full access to your business data. What would you like to know?",
+        content: 'Chat cleared! Still have access to all your data. What would you like to know?',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       },
     ])
@@ -113,7 +113,6 @@ export default function AIAssistant() {
 
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col lg:h-[calc(100vh-6rem)]">
-      {/* Header */}
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-yellow shadow-sm">
@@ -124,9 +123,9 @@ export default function AIAssistant() {
             <div className="flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-status-success" />
               <p className="text-xs text-ink-muted">
-                Powered by Groq · {nomba.transactions.length > 0
-                  ? `${nomba.transactions.length} live transactions loaded`
-                  : 'Sample data mode'}
+                {merchant.isDemo
+                  ? 'Demo mode — sample data'
+                  : `${merchant.isSandbox ? 'Sandbox' : 'Live'} · ${nomba.transactions.length} transactions`}
               </p>
             </div>
           </div>
@@ -141,7 +140,6 @@ export default function AIAssistant() {
       </div>
 
       <div className="card-base flex flex-1 flex-col overflow-hidden">
-        {/* Messages */}
         <div className="flex-1 space-y-4 overflow-y-auto p-4 lg:p-6">
           <AnimatePresence initial={false}>
             {messages.map((msg) => (
@@ -166,9 +164,7 @@ export default function AIAssistant() {
                     </div>
                   )}
                   <div
-                    className={`text-sm leading-relaxed ${
-                      msg.role === 'user' ? 'text-white' : 'text-ink-charcoal'
-                    }`}
+                    className={`text-sm leading-relaxed ${msg.role === 'user' ? 'text-white' : 'text-ink-charcoal'}`}
                     dangerouslySetInnerHTML={{ __html: formatContent(msg.content) }}
                   />
                   <p className={`mt-1.5 text-[10px] ${msg.role === 'user' ? 'text-white/50' : 'text-ink-light'}`}>
@@ -179,13 +175,8 @@ export default function AIAssistant() {
             ))}
           </AnimatePresence>
 
-          {/* Typing indicator */}
           {typing && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex justify-start"
-            >
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
               <div className="rounded-2xl border border-gray-100 bg-surface-off px-4 py-3">
                 <div className="mb-1.5 flex items-center gap-1.5">
                   <Sparkles className="h-3.5 w-3.5 text-brand-yellow-dark" />
@@ -205,13 +196,8 @@ export default function AIAssistant() {
             </motion.div>
           )}
 
-          {/* Error */}
           {error && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex items-start gap-2 rounded-xl border border-status-danger/20 bg-status-danger-soft px-4 py-3"
-            >
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-start gap-2 rounded-xl border border-status-danger/20 bg-status-danger-soft px-4 py-3">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-status-danger" />
               <div>
                 <p className="text-xs font-semibold text-status-danger">Couldn't reach AI</p>
@@ -219,13 +205,10 @@ export default function AIAssistant() {
               </div>
             </motion.div>
           )}
-
           <div ref={bottomRef} />
         </div>
 
-        {/* Input area */}
         <div className="border-t border-gray-100 p-4">
-          {/* Suggested questions */}
           <div className="mb-3 flex flex-wrap gap-2">
             {SUGGESTED.map((q) => (
               <button
@@ -238,11 +221,7 @@ export default function AIAssistant() {
               </button>
             ))}
           </div>
-
-          <form
-            onSubmit={(e) => { e.preventDefault(); sendMessage(input) }}
-            className="flex gap-2"
-          >
+          <form onSubmit={(e) => { e.preventDefault(); sendMessage(input) }} className="flex gap-2">
             <input
               ref={inputRef}
               value={input}
@@ -251,11 +230,7 @@ export default function AIAssistant() {
               className="input-base flex-1"
               disabled={typing}
             />
-            <button
-              type="submit"
-              disabled={typing || !input.trim()}
-              className="btn-primary shrink-0 px-4 disabled:opacity-50"
-            >
+            <button type="submit" disabled={typing || !input.trim()} className="btn-primary shrink-0 px-4 disabled:opacity-50">
               <Send className="h-4 w-4" />
             </button>
           </form>

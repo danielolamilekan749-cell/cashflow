@@ -11,7 +11,7 @@ import {
   X,
 } from 'lucide-react'
 import { useState } from 'react'
-import { merchant } from '../data/mockData'
+import { useMerchant } from '../hooks/useMerchant'
 
 type ProfileData = {
   fullName: string
@@ -25,18 +25,22 @@ type ProfileData = {
   specialties: string[]
 }
 
-const defaultProfile: ProfileData = {
-  fullName: merchant.owner,
-  headline: 'Merchant Owner · Provisions & Groceries',
-  businessName: merchant.name,
-  email: 'daniel@provisions.ng',
-  phone: '+234 801 234 5678',
-  location: 'Lagos, Nigeria',
-  website: 'danielprovisions.ng',
-  about:
-    'Experienced provisions merchant with 8+ years in retail. Focused on customer retention, smart inventory, and growing revenue through data-driven decisions with CashFlow AI and Nomba.',
-  specialties: ['Retail', 'Inventory Management', 'Customer Retention', 'Wholesale'],
-}
+export default function Profile() {
+  const merchant = useMerchant()
+
+  const defaultProfile: ProfileData = {
+    fullName: merchant.owner,
+    headline: merchant.isDemo ? 'Connect Nomba to see your real profile' : 'Merchant Owner · Nomba Business',
+    businessName: merchant.name,
+    email: merchant.email !== '—' ? merchant.email : '',
+    phone: merchant.phone !== '—' ? merchant.phone : '',
+    location: 'Nigeria',
+    website: '',
+    about: merchant.isDemo
+      ? 'Connect your Nomba account to populate this profile with your real business information.'
+      : `${merchant.name} — connected to Nomba ${merchant.isSandbox ? 'sandbox' : 'live'}.`,
+    specialties: merchant.isDemo ? [] : ['Retail', 'Nomba Merchant'],
+  }
 
 export default function Profile() {
   const [profile, setProfile] = useState<ProfileData>(defaultProfile)
@@ -102,8 +106,7 @@ export default function Profile() {
                   src={merchant.avatar}
                   alt={data.fullName}
                   className="h-20 w-20 rounded-2xl border-4 border-white bg-surface-muted object-cover shadow-card sm:h-24 sm:w-24"
-                />
-                {editing && (
+                />                {editing && (
                   <button
                     type="button"
                     className="absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-full bg-ink-black text-white shadow-md"
