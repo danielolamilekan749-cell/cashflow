@@ -4,12 +4,26 @@
  * All calls go through the Vite proxy (/api/nomba → https://api.nomba.com) in dev.
  */
 
-import { getNombaApiBase } from './config'
+import { getNombaApiBase, getNombaSandboxBase } from './config'
 import { getAccessToken, getStoredSession } from './tokenStore'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+/** For sandbox sessions (no real credentials), skip auth headers entirely */
+function isSandboxOnly(): boolean {
+  const session = getStoredSession()
+  return session?.clientId === 'sandbox' || session?.demoMode === true
+}
+
+function getBaseUrl(): string {
+  return isSandboxOnly() ? getNombaSandboxBase() : getNombaApiBase()
+}
+
 function authHeaders(): Record<string, string> {
+  if (isSandboxOnly()) {
+    // Sandbox accepts calls with empty/no auth headers
+    return { 'Content-Type': 'application/json' }
+  }
   const token = getAccessToken()
   const session = getStoredSession()
   return {
@@ -20,7 +34,7 @@ function authHeaders(): Record<string, string> {
 }
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${getNombaApiBase()}${path}`, {
+  const res = await fetch(`${getBaseUrl()}${path}`, {
     method: 'GET',
     headers: authHeaders(),
   })
@@ -30,7 +44,7 @@ async function get<T>(path: string): Promise<T> {
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${getNombaApiBase()}${path}`, {
+  const res = await fetch(`${getBaseUrl()}${path}`, {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(body),

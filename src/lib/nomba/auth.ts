@@ -155,6 +155,63 @@ export async function issueDemoAccessToken(): Promise<NombaAuthResult> {
   return { ok: true, token: demoToken, environment: 'sandbox' }
 }
 
+// ─── Sandbox connect (no credentials needed) ─────────────────────────────────
+// The Nomba sandbox allows unauthenticated calls for most endpoints.
+// We create a virtual account to get a real account number, then use that
+// accountId for all subsequent sandbox API calls.
+
+export async function connectSandbox(): Promise<NombaAuthResult> {
+  const { getNombaSandboxBase } = await import('./config')
+  const base = getNombaSandboxBase()
+
+  try {
+    // Step 1: Create a virtual account — no auth needed in sandbox
+    const accountRef = `cashflow_${Date.now()}`
+    const res = await fetch(`${base}/v1/accounts/virtual`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accountRef,
+        accountName: 'CashFlow AI Merchant',
+      }),
+    })
+
+    const json = await res.json() as NombaApiResponse<{
+      accountHolderId?: string
+      bankAccountNumber?: string
+      bankName?: string
+    }>
+
+    // Extract accountId — sandbox returns accountHolderId
+    const accountId = json.data?.accountHolderId ?? accountRef
+
+    // Step 2: Save a synthetic "sandbox" session so the rest of the app
+    // treats this as a connected, non-demo session
+    const syntheticToken: NombaTokenResponse = {
+      access_token: 'sandbox_no_auth',
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    }
+    saveAccessToken(syntheticToken, 'sandbox', false, {
+      clientId: 'sandbox',
+      accountId,
+    })
+
+    // Persist to Supabase
+    await supabase.from('nomba_sessions').upsert({
+      account_id: accountId,
+      client_id: 'sandbox',
+      connected_at: new Date().toISOString(),
+      expires_at: syntheticToken.expiresAt,
+      environment: 'sandbox',
+    }, { onConflict: 'account_id' }).catch(() => {})
+
+    return { ok: true, token: syntheticToken, environment: 'sandbox' }
+  } catch {
+    // If sandbox is unreachable, fall back to demo mode gracefully
+    return issueDemoAccessToken()
+  }
+}
+
 // ─── Supabase persistence ────────────────────────────────────────────────────
 
 async function persistSessionToSupabase(

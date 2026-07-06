@@ -4,6 +4,7 @@ import {
   issueAccessToken,
   revokeAccessToken,
   refreshAccessToken,
+  connectSandbox,
 } from '../lib/nomba/auth'
 import {
   clearSession,
@@ -24,10 +25,9 @@ type NombaConnectionContextValue = {
   isConnected: boolean
   error: string | null
   session: StoredNombaSession | null
-  // connect with user-supplied credentials
   connectWithCredentials: (creds: NombaCredentials) => Promise<boolean>
-  // demo / fallback connect
   connectDemo: () => Promise<boolean>
+  connectToSandbox: () => Promise<boolean>
   startSync: () => void
   completeSync: () => void
   disconnect: () => Promise<void>
@@ -98,6 +98,24 @@ export function NombaConnectionProvider({ children }: { children: React.ReactNod
     return true
   }, [])
 
+  // Connect to Nomba sandbox — no credentials needed
+  const connectToSandbox = useCallback(async (): Promise<boolean> => {
+    setError(null)
+    setPhase('connecting')
+
+    const result = await connectSandbox()
+
+    if (!result.ok) {
+      setError(result.error)
+      setPhase('locked')
+      return false
+    }
+
+    setSession(getStoredSession())
+    setPhase('syncing')
+    return true
+  }, [])
+
   // Demo/fallback connect (no real credentials)
   const connectDemo = useCallback(async (): Promise<boolean> => {
     setError(null)
@@ -146,12 +164,13 @@ export function NombaConnectionProvider({ children }: { children: React.ReactNod
       session,
       connectWithCredentials,
       connectDemo,
+      connectToSandbox,
       startSync,
       completeSync,
       disconnect,
       clearError,
     }),
-    [phase, hydrated, error, session, connectWithCredentials, connectDemo, startSync, completeSync, disconnect, clearError],
+    [phase, hydrated, error, session, connectWithCredentials, connectDemo, connectToSandbox, startSync, completeSync, disconnect, clearError],
   )
 
   return (

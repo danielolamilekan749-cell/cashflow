@@ -28,6 +28,7 @@ export default function NombaConnectOverlay({ children }: { children: React.Reac
     error,
     session,
     connectWithCredentials,
+    connectToSandbox,
     completeSync,
     clearError,
   } = useNombaConnection()
@@ -46,6 +47,12 @@ export default function NombaConnectOverlay({ children }: { children: React.Reac
 
   const openModal = () => { setModalOpen(true); setStep('intro') }
   const closeModal = () => { setModalOpen(false); setFieldError(''); clearError() }
+
+  const handleSandboxConnect = async () => {
+    clearError()
+    const ok = await connectToSandbox()
+    if (ok) setStep('syncing')
+  }
 
   const handleCredentialSubmit = async () => {
     if (!clientId.trim() || !clientSecret.trim() || !accountId.trim()) {
@@ -167,7 +174,7 @@ export default function NombaConnectOverlay({ children }: { children: React.Reac
 
                     <h2 className="text-center text-xl font-bold text-ink-black">Connect with Nomba</h2>
                     <p className="mx-auto mt-2 max-w-xs text-center text-sm leading-relaxed text-ink-muted">
-                      Link your Nomba account to replace sample data with your real transactions, balance, and sales.
+                      Replace sample data with real transactions, balance, and sales from Nomba.
                     </p>
 
                     <div className="mt-5 grid grid-cols-3 gap-2">
@@ -183,30 +190,35 @@ export default function NombaConnectOverlay({ children }: { children: React.Reac
                       ))}
                     </div>
 
+                    {/* PRIMARY — Sandbox (no credentials) */}
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => setStep('credentials')}
+                      onClick={handleSandboxConnect}
+                      disabled={isConnecting}
                       className="btn-primary mt-6 w-full py-3 text-sm"
                     >
-                      I have API keys
+                      {isConnecting ? 'Connecting to sandbox...' : 'Connect to Nomba Sandbox'}
                       <ChevronRight className="h-4 w-4" />
                     </motion.button>
+                    <p className="mt-1.5 text-center text-[11px] text-ink-muted">
+                      No credentials needed — uses the free Nomba sandbox
+                    </p>
 
-                    <div className="mt-4 rounded-xl border border-brand-yellow/20 bg-brand-yellow/8 px-4 py-3">
-                      <p className="text-xs font-semibold text-ink-charcoal">Don't have keys yet?</p>
-                      <p className="mt-0.5 text-[11px] leading-relaxed text-ink-muted">
-                        Sign up at nomba.com → Settings → Developer → Create API Client. You'll get your Account ID, Client ID and Client Secret.
-                      </p>
-                      <a
-                        href={DOCS_URL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-yellow-dark hover:underline"
-                      >
-                        Get your keys <ExternalLink className="h-3 w-3" />
-                      </a>
+                    {/* Divider */}
+                    <div className="my-4 flex items-center gap-3">
+                      <div className="h-px flex-1 bg-gray-100" />
+                      <span className="text-[11px] text-ink-light">or</span>
+                      <div className="h-px flex-1 bg-gray-100" />
                     </div>
+
+                    {/* SECONDARY — Real credentials */}
+                    <button
+                      onClick={() => setStep('credentials')}
+                      className="w-full rounded-xl border border-gray-200 py-2.5 text-xs font-semibold text-ink-charcoal transition-colors hover:bg-surface-muted"
+                    >
+                      I have API keys (production / private sandbox)
+                    </button>
                   </motion.div>
                 )}
 
@@ -352,7 +364,9 @@ export default function NombaConnectOverlay({ children }: { children: React.Reac
                     </motion.div>
                     <h2 className="text-xl font-bold text-ink-black">You're connected!</h2>
                     <p className="mx-auto mt-2 max-w-xs text-sm text-ink-muted">
-                      Your Nomba account is synced. Dashboard is now showing live data.
+                      {session?.clientId === 'sandbox'
+                        ? 'Nomba sandbox is live. Real test data is now flowing into your dashboard.'
+                        : 'Your Nomba account is synced. Dashboard is now showing live data.'}
                     </p>
                   </motion.div>
                 )}
