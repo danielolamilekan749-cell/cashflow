@@ -164,9 +164,12 @@ export async function connectSandbox(): Promise<NombaAuthResult> {
   const { getNombaSandboxBase } = await import('./config')
   const base = getNombaSandboxBase()
 
+  console.log('[connectSandbox] Connecting to Nomba sandbox:', base)
+
   try {
-    // Step 1: Create a virtual account — no auth needed in sandbox
     const accountRef = `cashflow_${Date.now()}`
+    console.log('[connectSandbox] Creating virtual account with ref:', accountRef)
+
     const res = await fetch(`${base}/v1/accounts/virtual`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -182,11 +185,11 @@ export async function connectSandbox(): Promise<NombaAuthResult> {
       bankName?: string
     }>
 
-    // Extract accountId — sandbox returns accountHolderId
-    const accountId = json.data?.accountHolderId ?? accountRef
+    console.log('[connectSandbox] Sandbox response:', json)
 
-    // Step 2: Save a synthetic "sandbox" session so the rest of the app
-    // treats this as a connected, non-demo session
+    const accountId = json.data?.accountHolderId ?? accountRef
+    console.log('[connectSandbox] Using accountId:', accountId)
+
     const syntheticToken: NombaTokenResponse = {
       access_token: 'sandbox_no_auth',
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
@@ -196,7 +199,6 @@ export async function connectSandbox(): Promise<NombaAuthResult> {
       accountId,
     })
 
-    // Persist to Supabase
     await supabase.from('nomba_sessions').upsert({
       account_id: accountId,
       client_id: 'sandbox',
@@ -205,9 +207,10 @@ export async function connectSandbox(): Promise<NombaAuthResult> {
       environment: 'sandbox',
     }, { onConflict: 'account_id' }).catch(() => {})
 
+    console.log('[connectSandbox] ✅ Connected successfully')
     return { ok: true, token: syntheticToken, environment: 'sandbox' }
-  } catch {
-    // If sandbox is unreachable, fall back to demo mode gracefully
+  } catch (err) {
+    console.error('[connectSandbox] Failed, falling back to demo:', err)
     return issueDemoAccessToken()
   }
 }

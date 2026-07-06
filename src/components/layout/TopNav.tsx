@@ -1,12 +1,18 @@
 import { Bell, Bot, Search, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { merchant } from '../../data/mockData'
+import { useNombaConnection } from '../../context/NombaConnectionContext'
 import { formatCurrency } from '../../utils/format'
 
 export default function TopNav() {
   const hour = new Date().getHours()
   const greeting =
     hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening'
+
+  const { session, isConnected } = useNombaConnection()
+  const isDemo = session?.demoMode ?? true
+  const isSandbox = isConnected && !isDemo && session?.clientId === 'sandbox'
+  const isReal = isConnected && !isDemo && session?.clientId !== 'sandbox'
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/20 bg-white/70 backdrop-blur-xl lg:border-gray-100/80 lg:bg-white/80">
@@ -15,7 +21,25 @@ export default function TopNav() {
           <p className="text-sm font-semibold text-ink-black">
             {greeting}, {merchant.owner} 👋
           </p>
-          <p className="text-xs text-ink-muted">{merchant.name}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-ink-muted">{merchant.name}</p>
+            {/* Connection status pill */}
+            {isReal && (
+              <span className="rounded-full bg-status-success-soft px-2 py-0.5 text-[10px] font-bold text-status-success">
+                ● Live
+              </span>
+            )}
+            {isSandbox && (
+              <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600">
+                ● Sandbox
+              </span>
+            )}
+            {isDemo && (
+              <span className="rounded-full bg-brand-yellow/15 px-2 py-0.5 text-[10px] font-bold text-brand-yellow-dark">
+                Demo
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="relative hidden flex-1 md:block md:max-w-md lg:max-w-sm xl:max-w-md">
