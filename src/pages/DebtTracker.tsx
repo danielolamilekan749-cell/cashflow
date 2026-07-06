@@ -14,6 +14,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Modal from '../components/ui/Modal'
 import { useDebts } from '../hooks/useDebts'
+import { useNombaConnection } from '../context/NombaConnectionContext'
 import { sendToGroq } from '../lib/ai/groq'
 import type { Debt } from '../types'
 import { formatCurrency } from '../utils/format'
@@ -125,7 +126,8 @@ function AIDebtReminder({ debts }: { debts: Debt[] }) {
 }
 
 export default function DebtTracker() {
-  const { debts: debtList, addDebt, markPaid: markPaidDB, deleteDebt } = useDebts()
+  const { session } = useNombaConnection()
+  const { debts: debtList, addDebt, markPaid: markPaidDB, deleteDebt } = useDebts(session?.accountId)
   const [filter, setFilter] = useState<DebtFilter>('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(emptyForm)

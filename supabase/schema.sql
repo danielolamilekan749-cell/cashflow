@@ -34,7 +34,7 @@ create table if not exists merchant_profiles (
 -- Persists debts across sessions (survives page reload/clear)
 create table if not exists debts (
   id                   uuid primary key default uuid_generate_v4(),
-  merchant_account_id  text references merchant_profiles(account_id) on delete cascade,
+  merchant_account_id  text,
   customer_name        text not null,
   phone                text,
   amount               numeric(12, 2) not null,
@@ -68,7 +68,7 @@ create trigger debts_updated_at
 -- Stores the merchant's WhatsApp number and alert preferences
 create table if not exists whatsapp_config (
   id                   uuid primary key default uuid_generate_v4(),
-  merchant_account_id  text references merchant_profiles(account_id) on delete cascade,
+  merchant_account_id  text,
   phone_number         text not null,
   verified             boolean default false,
   connected_at         timestamptz default now(),
