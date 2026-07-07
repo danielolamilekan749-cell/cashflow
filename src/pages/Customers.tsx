@@ -87,7 +87,6 @@ export default function Customers() {
   }, [liveCustomers, filter])
 
   const goldCount = liveCustomers.filter((c) => c.tier === 'gold').length
-  const totalSpend = liveCustomers.reduce((s, c) => s + c.totalSpend, 0)
   const avgHealth = liveCustomers.length > 0
     ? Math.round(liveCustomers.reduce((s, c) => s + c.healthScore, 0) / liveCustomers.length)
     : 0

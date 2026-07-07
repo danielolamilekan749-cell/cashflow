@@ -9,13 +9,11 @@ import {
   Search,
   Sparkles,
   Trash2,
-  TrendingDown,
   TrendingUp,
   X,
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { sendToGroq } from '../lib/ai/groq'
-import { useMerchant } from '../hooks/useMerchant'
 import { useProducts, type Product } from '../hooks/useProducts'
 import { formatCurrency, formatCompact } from '../utils/format'
 
@@ -238,7 +236,6 @@ function ProductModal({
 
 export default function Products() {
   const { products, addProduct, updateProduct, deleteProduct } = useProducts()
-  const { merchant } = useMerchant()
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)

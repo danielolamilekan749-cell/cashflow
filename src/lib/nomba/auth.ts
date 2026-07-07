@@ -177,13 +177,15 @@ export async function connectSandbox(): Promise<NombaAuthResult> {
     }
     saveAccessToken(syntheticToken, 'sandbox', false, { clientId: 'sandbox', accountId })
 
-    await supabase.from('nomba_sessions').upsert({
-      account_id: accountId,
-      client_id: 'sandbox',
-      connected_at: new Date().toISOString(),
-      expires_at: syntheticToken.expiresAt,
-      environment: 'sandbox',
-    }, { onConflict: 'account_id' }).catch(() => {})
+    try {
+      await supabase.from('nomba_sessions').upsert({
+        account_id: accountId,
+        client_id: 'sandbox',
+        connected_at: new Date().toISOString(),
+        expires_at: syntheticToken.expiresAt,
+        environment: 'sandbox',
+      }, { onConflict: 'account_id' })
+    } catch (e) { /* ignore */ }
 
     console.log('[connectSandbox] ✅ Unauthenticated sandbox session created, accountId:', accountId)
     return { ok: true, token: syntheticToken, environment: 'sandbox' }

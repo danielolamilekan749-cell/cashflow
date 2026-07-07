@@ -31,7 +31,6 @@ export function useMerchant(): MerchantInfo {
   // A session is demo ONLY if explicitly flagged demoMode AND sandbox failed
   const isSandbox = isConnected && session?.clientId === 'sandbox'
   const isLive = isConnected && !session?.demoMode && session?.clientId !== 'sandbox'
-  const isDemo = isConnected && session?.demoMode === true && !isSandbox
 
   // Sandbox connected — show real Nomba sandbox account data
   if (isSandbox || isLive) {

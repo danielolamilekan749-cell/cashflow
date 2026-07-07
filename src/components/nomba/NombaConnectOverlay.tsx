@@ -334,7 +334,7 @@ export default function NombaConnectOverlay({ children }: { children: React.Reac
                 )}
 
                 {/* Step 3 — Syncing */}
-                {(step === 'syncing' || (isSyncing && step === 'syncing')) && (
+                {(step === 'syncing' || isSyncing) && (
                   <motion.div
                     key="syncing"
                     initial={{ opacity: 0, x: 20 }}

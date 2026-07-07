@@ -127,7 +127,7 @@ function AIDebtReminder({ debts }: { debts: Debt[] }) {
 
 export default function DebtTracker() {
   const { session } = useNombaConnection()
-  const { debts: debtList, addDebt, markPaid: markPaidDB, deleteDebt, saveError } = useDebts(session?.accountId)
+  const { debts: debtList, addDebt, markPaid: markPaidDB, saveError } = useDebts(session?.accountId)
   const [filter, setFilter] = useState<DebtFilter>('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(emptyForm)

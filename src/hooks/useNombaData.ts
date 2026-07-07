@@ -273,14 +273,16 @@ export function useNombaData() {
 
       // Persist merchant info to Supabase
       if (resolvedAccount && session?.accountId) {
-        supabase.from('merchant_profiles').upsert({
-          account_id: session.accountId,
-          account_name: resolvedAccount.accountName,
-          email: resolvedAccount.email,
-          phone_number: resolvedAccount.phoneNumber,
-          status: resolvedAccount.status,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'account_id' }).catch(() => {})
+        try {
+          await supabase.from('merchant_profiles').upsert({
+            account_id: session.accountId,
+            account_name: resolvedAccount.accountName,
+            email: resolvedAccount.email,
+            phone_number: resolvedAccount.phoneNumber,
+            status: resolvedAccount.status,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'account_id' })
+        } catch (e) { /* ignore */ }
       }
 
       setState({

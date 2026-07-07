@@ -1,5 +1,5 @@
 export { issueAccessToken, issueDemoAccessToken, refreshAccessToken, revokeAccessToken, connectSandbox } from './auth'
-export { getNombaApiBase, NOMBA_API_PROXY, NOMBA_PRODUCTION_URL, NOMBA_SANDBOX_URL } from './config'
+export { getNombaApiBase, NOMBA_PROXY, NOMBA_PRODUCTION_URL, NOMBA_SANDBOX_URL } from './config'
 export {
   clearSession,
   getAccessToken,
