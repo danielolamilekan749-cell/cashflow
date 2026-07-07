@@ -42,7 +42,7 @@ export default function NombaConnectOverlay({ children }: { children: React.Reac
   const [showSecret, setShowSecret] = useState(false)
   const [fieldError, setFieldError] = useState('')
 
-  const isDemo = session?.demoMode ?? true
+  const isDemo = session?.demoMode === true && session?.clientId !== 'sandbox'
   const showBanner = hydrated && isConnected && isDemo && !bannerDismissed
 
   const openModal = () => { setModalOpen(true); setStep('intro') }
@@ -97,8 +97,8 @@ export default function NombaConnectOverlay({ children }: { children: React.Reac
                 <Zap className="h-4 w-4 text-brand-yellow-dark" fill="currentColor" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold text-ink-black">Demo mode — sample data</p>
-                <p className="text-[11px] text-ink-muted">Connect your Nomba account to see live figures</p>
+                <p className="text-xs font-semibold text-ink-black">Sandbox offline — showing demo data</p>
+                <p className="text-[11px] text-ink-muted">Tap Connect to retry the Nomba sandbox</p>
               </div>
               <button
                 onClick={openModal}

@@ -36,47 +36,62 @@ type NombaConnectionContextValue = {
 
 const NombaConnectionContext = createContext<NombaConnectionContextValue | null>(null)
 
+/** Called on first load and after session expiry — connects to Nomba sandbox silently */
+async function bootSandbox(
+  setSession: (s: StoredNombaSession | null) => void,
+  setPhase: (p: NombaConnectionPhase) => void,
+  setHydrated: (v: boolean) => void,
+) {
+  console.log('[CashFlow] Connecting to Nomba sandbox...')
+  const result = await connectSandbox()
+  if (result.ok) {
+    console.log('[CashFlow] Sandbox connected ✅')
+    setSession(getStoredSession())
+    setPhase('connected')
+  } else {
+    // Sandbox unreachable — fall back to demo so the app still works
+    console.warn('[CashFlow] Sandbox unreachable, using demo mode:', result.error)
+    await issueDemoAccessToken()
+    setSession(getStoredSession())
+    setPhase('connected')
+  }
+  setHydrated(true)
+}
+
 export function NombaConnectionProvider({ children }: { children: React.ReactNode }) {
   const [phase, setPhase] = useState<NombaConnectionPhase>('locked')
   const [hydrated, setHydrated] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [session, setSession] = useState<StoredNombaSession | null>(null)
 
-  // Restore session on mount, auto-refresh if expiring.
-  // If no session exists, automatically start in demo mode so the
-  // dashboard loads immediately — no credentials required.
   useEffect(() => {
     const stored = getStoredSession()
+
     if (isSessionConnected() && stored) {
-      if (isTokenExpired() && !stored.demoMode) {
+      // Already have a session
+      if (isTokenExpired() && !stored.demoMode && stored.clientId !== 'sandbox') {
+        // Real credentials expired — try refresh
         refreshAccessToken().then((result) => {
           if (result.ok) {
             setSession(getStoredSession())
             setPhase('connected')
           } else {
+            // Refresh failed — reconnect sandbox
             clearSession()
-            // expired real session → auto-demo
-            issueDemoAccessToken().then(() => {
-              setSession(getStoredSession())
-              setPhase('connected')
-              setHydrated(true)
-            })
+            bootSandbox(setSession, setPhase, setHydrated)
             return
           }
           setHydrated(true)
         })
       } else {
+        // Session still valid (sandbox sessions never expire in 24h window)
         setSession(stored)
         setPhase('connected')
         setHydrated(true)
       }
     } else {
-      // No session at all — boot into demo mode automatically
-      issueDemoAccessToken().then(() => {
-        setSession(getStoredSession())
-        setPhase('connected')
-        setHydrated(true)
-      })
+      // No session — auto-connect sandbox (no credentials needed)
+      bootSandbox(setSession, setPhase, setHydrated)
     }
   }, [])
 

@@ -26,42 +26,44 @@ export function useMerchant(): MerchantInfo {
   const { session, isConnected } = useNombaConnection()
   const nomba = useNombaData()
 
-  const isDemo = session?.demoMode ?? true
-  const isSandbox = isConnected && !isDemo && session?.clientId === 'sandbox'
-  const isLive = isConnected && !isDemo && session?.clientId !== 'sandbox'
+  // A session is sandbox if clientId is 'sandbox' (auto-connected)
+  // A session is live if it has real credentials
+  // A session is demo ONLY if explicitly flagged demoMode AND sandbox failed
+  const isSandbox = isConnected && session?.clientId === 'sandbox'
+  const isLive = isConnected && !session?.demoMode && session?.clientId !== 'sandbox'
+  const isDemo = isConnected && session?.demoMode === true && !isSandbox
 
-  // Demo mode — show generic placeholders, not "Daniel"
-  if (isDemo) {
+  // Sandbox connected — show real Nomba sandbox account data
+  if (isSandbox || isLive) {
+    const account = nomba.account
+    const accountName = account?.accountName ?? 'Nomba Sandbox Merchant'
+    const firstName = accountName.split(/[\s/]/)[0] ?? accountName
+
     return {
-      name: 'Your Business',
-      owner: 'Merchant',
-      avatar: GENERIC_AVATAR,
-      accountId: '',
-      email: '—',
-      phone: '—',
-      currency: 'NGN',
-      isDemo: true,
-      isSandbox: false,
-      isLive: false,
+      name: accountName,
+      owner: firstName,
+      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${session?.accountId ?? 'sandbox'}`,
+      accountId: session?.accountId ?? '',
+      email: account?.email ?? '—',
+      phone: account?.phoneNumber ?? '—',
+      currency: account?.currency ?? 'NGN',
+      isDemo: false,
+      isSandbox,
+      isLive,
     }
   }
 
-  // Sandbox or live — use real account data from Nomba API
-  const account = nomba.account
-  const accountName = account?.accountName ?? 'Nomba Merchant'
-  // Extract first name from account name for greeting
-  const firstName = accountName.split(' ')[0] ?? accountName
-
+  // Fallback demo (only when sandbox is genuinely unreachable)
   return {
-    name: accountName,
-    owner: firstName,
-    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${session?.accountId ?? 'merchant'}`,
-    accountId: session?.accountId ?? '',
-    email: account?.email ?? '—',
-    phone: account?.phoneNumber ?? '—',
-    currency: account?.currency ?? 'NGN',
-    isDemo: false,
-    isSandbox,
-    isLive,
+    name: 'Your Business',
+    owner: 'Merchant',
+    avatar: GENERIC_AVATAR,
+    accountId: '',
+    email: '—',
+    phone: '—',
+    currency: 'NGN',
+    isDemo: true,
+    isSandbox: false,
+    isLive: false,
   }
 }
