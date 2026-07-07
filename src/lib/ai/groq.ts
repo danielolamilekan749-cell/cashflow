@@ -127,36 +127,40 @@ export async function sendToGroq(
   const apiKey = import.meta.env.VITE_GROQ_API_KEY as string
 
   if (!apiKey) {
-    throw new Error('Groq API key not configured. Add VITE_GROQ_API_KEY to your .env file.')
+    return 'Groq AI is not configured yet. Add VITE_GROQ_API_KEY to your .env file!'
   }
 
   const systemPrompt = buildSystemPrompt(ctx)
 
-  const response = await fetch(GROQ_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...messages.map(m => ({ role: m.role, content: m.content })),
-      ],
-      max_tokens: 1024,
-      temperature: 0.7,
-    }),
-  })
+  try {
+    const response = await fetch(GROQ_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...messages.map(m => ({ role: m.role, content: m.content })),
+        ],
+        max_tokens: 1024,
+        temperature: 0.7,
+      }),
+    })
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}))
-    throw new Error(
-      (err as { error?: { message?: string } }).error?.message ??
-        `Groq API error ${response.status}`,
-    )
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      const errorMsg = (err as { error?: { message?: string } }).error?.message ?? `Groq API error ${response.status}`
+      console.error('[Groq]', errorMsg)
+      return `Oops! Something went wrong with Groq AI: ${errorMsg}`
+    }
+
+    const data = await response.json() as { choices: { message: { content: string } }[] }
+    return data.choices[0]?.message?.content ?? 'Sorry, I could not generate a response.'
+  } catch (e) {
+    console.error('[Groq]', e)
+    return 'Sorry, I could not reach Groq AI. Please try again later!'
   }
-
-  const data = await response.json() as { choices: { message: { content: string } }[] }
-  return data.choices[0]?.message?.content ?? 'Sorry, I could not generate a response.'
 }
