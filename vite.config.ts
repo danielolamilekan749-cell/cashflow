@@ -5,13 +5,13 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // Sandbox proxy — no credentials needed for most endpoints
+      // Sandbox — correct base: sandbox.api.nomba.com
       '/api/nomba-sandbox': {
-        target: 'https://sandbox.nomba.com',
+        target: 'https://sandbox.api.nomba.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/nomba-sandbox/, ''),
       },
-      // Production proxy — requires real credentials
+      // Production
       '/api/nomba': {
         target: 'https://api.nomba.com',
         changeOrigin: true,
