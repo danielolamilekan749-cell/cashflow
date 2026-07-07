@@ -90,9 +90,30 @@ create table notification_log (
 
 create index notif_merchant_idx on notification_log(merchant_account_id);
 
+-- Products (merchant-owned catalogue)
+create table products (
+  id                   uuid primary key default uuid_generate_v4(),
+  merchant_account_id  text not null,
+  name                 text not null,
+  description          text,
+  category             text,
+  price                numeric(12, 2) not null default 0,
+  cost_price           numeric(12, 2) default 0,
+  stock_level          integer default 0,
+  units_sold           integer default 0,
+  image_url            text,
+  status               text default 'active',
+  created_at           timestamptz default now(),
+  updated_at           timestamptz default now()
+);
+
+create index products_merchant_idx on products(merchant_account_id);
+
+alter table products enable row level security;
+create policy "anon_all_products" on products for all to anon using (true) with check (true);
+
 -- Transaction cache
-create table transaction_cache (
-  id                   text primary key,
+create table transaction_cache (  id                   text primary key,
   merchant_account_id  text,
   status               text,
   amount               numeric(12, 2),
