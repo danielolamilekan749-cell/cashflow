@@ -61,7 +61,7 @@ export function useDebts(accountId?: string) {
       .select('*')
       .eq('merchant_account_id', midRef.current)
       .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
+      .then(({ data, error }: { data: any; error: any }) => {
         if (error) {
           console.error('[useDebts] Load error:', error.message, error.code, error.details)
           // Table may not exist yet — show mock data

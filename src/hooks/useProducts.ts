@@ -66,7 +66,7 @@ export function useProducts(accountId?: string) {
       .select('*')
       .eq('merchant_account_id', midRef.current)
       .order('created_at', { ascending: false })
-      .then(({ data, error: err }) => {
+      .then(({ data, error: err }: { data: any; error: any }) => {
         if (err) {
           console.error('[useProducts] Load error:', err.message)
           setError(err.message)
