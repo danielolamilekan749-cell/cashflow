@@ -30,7 +30,9 @@ export default function Profile() {
 
   const defaultProfile: ProfileData = {
     fullName: merchant.owner,
-    headline: merchant.isDemo ? 'Connect Nomba to see your real profile' : 'Merchant Owner · Nomba Business',
+    headline: merchant.isDemo
+      ? 'Connect Nomba to see your real profile'
+      : `Merchant Owner · ${merchant.isSandbox ? 'Nomba Sandbox' : 'Nomba Live'}`,
     businessName: merchant.name,
     email: merchant.email !== '—' ? merchant.email : '',
     phone: merchant.phone !== '—' ? merchant.phone : '',
@@ -38,32 +40,18 @@ export default function Profile() {
     website: '',
     about: merchant.isDemo
       ? 'Connect your Nomba account to populate this profile with your real business information.'
-      : `${merchant.name} — connected to Nomba ${merchant.isSandbox ? 'sandbox' : 'live'}.`,
+      : `${merchant.name} — connected to Nomba ${merchant.isSandbox ? 'sandbox' : 'live'} account.`,
     specialties: merchant.isDemo ? [] : ['Retail', 'Nomba Merchant'],
   }
 
-export default function Profile() {
   const [profile, setProfile] = useState<ProfileData>(defaultProfile)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<ProfileData>(defaultProfile)
   const [newSpecialty, setNewSpecialty] = useState('')
 
-  const startEdit = () => {
-    setDraft({ ...profile })
-    setEditing(true)
-  }
-
-  const cancelEdit = () => {
-    setDraft({ ...profile })
-    setEditing(false)
-    setNewSpecialty('')
-  }
-
-  const saveEdit = () => {
-    setProfile({ ...draft })
-    setEditing(false)
-    setNewSpecialty('')
-  }
+  const startEdit = () => { setDraft({ ...profile }); setEditing(true) }
+  const cancelEdit = () => { setDraft({ ...profile }); setEditing(false); setNewSpecialty('') }
+  const saveEdit = () => { setProfile({ ...draft }); setEditing(false); setNewSpecialty('') }
 
   const addSpecialty = () => {
     const trimmed = newSpecialty.trim()
@@ -72,9 +60,8 @@ export default function Profile() {
     setNewSpecialty('')
   }
 
-  const removeSpecialty = (item: string) => {
+  const removeSpecialty = (item: string) =>
     setDraft({ ...draft, specialties: draft.specialties.filter((s) => s !== item) })
-  }
 
   const data = editing ? draft : profile
 
@@ -106,7 +93,8 @@ export default function Profile() {
                   src={merchant.avatar}
                   alt={data.fullName}
                   className="h-20 w-20 rounded-2xl border-4 border-white bg-surface-muted object-cover shadow-card sm:h-24 sm:w-24"
-                />                {editing && (
+                />
+                {editing && (
                   <button
                     type="button"
                     className="absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-full bg-ink-black text-white shadow-md"
@@ -141,22 +129,19 @@ export default function Profile() {
               </div>
             </div>
 
-            <div className="flex gap-2 shrink-0">
+            <div className="flex shrink-0 gap-2">
               {editing ? (
                 <>
                   <button type="button" onClick={cancelEdit} className="btn-secondary text-xs">
-                    <X className="h-3.5 w-3.5" />
-                    Cancel
+                    <X className="h-3.5 w-3.5" /> Cancel
                   </button>
                   <button type="button" onClick={saveEdit} className="btn-primary text-xs">
-                    <Check className="h-3.5 w-3.5" />
-                    Save
+                    <Check className="h-3.5 w-3.5" /> Save
                   </button>
                 </>
               ) : (
                 <button type="button" onClick={startEdit} className="btn-primary text-xs">
-                  <Edit3 className="h-3.5 w-3.5" />
-                  Edit profile
+                  <Edit3 className="h-3.5 w-3.5" /> Edit profile
                 </button>
               )}
             </div>
@@ -183,87 +168,30 @@ export default function Profile() {
       <div className="card-base p-5 sm:p-6">
         <h2 className="text-base font-semibold text-ink-black">Business Information</h2>
         <div className="mt-4 space-y-3">
-          <div className="flex items-center gap-3 rounded-xl bg-surface-off px-4 py-3">
-            <Building2 className="h-4 w-4 shrink-0 text-ink-muted" />
-            {editing ? (
-              <input
-                value={draft.businessName}
-                onChange={(e) => setDraft({ ...draft, businessName: e.target.value })}
-                className="input-base !py-1.5"
-                placeholder="Business name"
-              />
-            ) : (
-              <div>
-                <p className="text-[10px] text-ink-muted">Business</p>
-                <p className="text-sm font-semibold">{data.businessName}</p>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3 rounded-xl bg-surface-off px-4 py-3">
-            <Mail className="h-4 w-4 shrink-0 text-ink-muted" />
-            {editing ? (
-              <input
-                value={draft.email}
-                onChange={(e) => setDraft({ ...draft, email: e.target.value })}
-                className="input-base !py-1.5"
-                type="email"
-              />
-            ) : (
-              <div>
-                <p className="text-[10px] text-ink-muted">Email</p>
-                <p className="text-sm font-semibold">{data.email}</p>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3 rounded-xl bg-surface-off px-4 py-3">
-            <Phone className="h-4 w-4 shrink-0 text-ink-muted" />
-            {editing ? (
-              <input
-                value={draft.phone}
-                onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
-                className="input-base !py-1.5"
-              />
-            ) : (
-              <div>
-                <p className="text-[10px] text-ink-muted">Phone</p>
-                <p className="text-sm font-semibold">{data.phone}</p>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3 rounded-xl bg-surface-off px-4 py-3">
-            <Globe className="h-4 w-4 shrink-0 text-ink-muted" />
-            {editing ? (
-              <input
-                value={draft.website}
-                onChange={(e) => setDraft({ ...draft, website: e.target.value })}
-                className="input-base !py-1.5"
-              />
-            ) : (
-              <div>
-                <p className="text-[10px] text-ink-muted">Website</p>
-                <p className="text-sm font-semibold">{data.website}</p>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3 rounded-xl bg-surface-off px-4 py-3">
-            <MapPin className="h-4 w-4 shrink-0 text-ink-muted" />
-            {editing ? (
-              <input
-                value={draft.location}
-                onChange={(e) => setDraft({ ...draft, location: e.target.value })}
-                className="input-base !py-1.5"
-              />
-            ) : (
-              <div>
-                <p className="text-[10px] text-ink-muted">Location</p>
-                <p className="text-sm font-semibold">{data.location}</p>
-              </div>
-            )}
-          </div>
+          {[
+            { icon: Building2, label: 'Business', field: 'businessName' as const },
+            { icon: Mail,      label: 'Email',    field: 'email'        as const },
+            { icon: Phone,     label: 'Phone',    field: 'phone'        as const },
+            { icon: Globe,     label: 'Website',  field: 'website'      as const },
+            { icon: MapPin,    label: 'Location', field: 'location'     as const },
+          ].map(({ icon: Icon, label, field }) => (
+            <div key={field} className="flex items-center gap-3 rounded-xl bg-surface-off px-4 py-3">
+              <Icon className="h-4 w-4 shrink-0 text-ink-muted" />
+              {editing ? (
+                <input
+                  value={draft[field]}
+                  onChange={(e) => setDraft({ ...draft, [field]: e.target.value })}
+                  className="input-base !py-1.5"
+                  placeholder={label}
+                />
+              ) : (
+                <div>
+                  <p className="text-[10px] text-ink-muted">{label}</p>
+                  <p className="text-sm font-semibold">{data[field] || '—'}</p>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
@@ -278,16 +206,15 @@ export default function Profile() {
             >
               {item}
               {editing && (
-                <button
-                  type="button"
-                  onClick={() => removeSpecialty(item)}
-                  className="text-ink-muted hover:text-status-danger"
-                >
+                <button type="button" onClick={() => removeSpecialty(item)} className="text-ink-muted hover:text-status-danger">
                   <X className="h-3 w-3" />
                 </button>
               )}
             </span>
           ))}
+          {data.specialties.length === 0 && !editing && (
+            <p className="text-xs text-ink-muted">No specialties added yet.</p>
+          )}
         </div>
         {editing && (
           <div className="mt-3 flex gap-2">
@@ -298,9 +225,7 @@ export default function Profile() {
               className="input-base flex-1"
               onKeyDown={(e) => e.key === 'Enter' && addSpecialty()}
             />
-            <button type="button" onClick={addSpecialty} className="btn-secondary text-xs">
-              Add
-            </button>
+            <button type="button" onClick={addSpecialty} className="btn-secondary text-xs">Add</button>
           </div>
         )}
       </div>
@@ -311,11 +236,25 @@ export default function Profile() {
           <Building2 className="h-6 w-6 text-brand-yellow-dark" />
         </div>
         <div>
-          <p className="text-sm font-bold text-ink-black">Nomba Merchant</p>
-          <p className="text-xs text-ink-muted">Verified business account · CashFlow AI enabled</p>
+          <p className="text-sm font-bold text-ink-black">
+            {merchant.isSandbox ? 'Nomba Sandbox Account' : merchant.isLive ? 'Nomba Live Account' : 'Nomba Merchant'}
+          </p>
+          <p className="text-xs text-ink-muted">
+            {merchant.isSandbox
+              ? 'Connected to Nomba sandbox · CashFlow AI enabled'
+              : merchant.isLive
+              ? 'Verified live account · CashFlow AI enabled'
+              : 'Connect Nomba to verify your account'}
+          </p>
         </div>
-        <span className="ml-auto rounded-full bg-status-success-soft px-3 py-1 text-xs font-semibold text-status-success">
-          Verified
+        <span className={`ml-auto rounded-full px-3 py-1 text-xs font-semibold ${
+          merchant.isSandbox
+            ? 'bg-blue-50 text-blue-600'
+            : merchant.isLive
+            ? 'bg-status-success-soft text-status-success'
+            : 'bg-brand-yellow/15 text-brand-yellow-dark'
+        }`}>
+          {merchant.isSandbox ? '● Sandbox' : merchant.isLive ? '● Live' : 'Demo'}
         </span>
       </div>
     </motion.div>
